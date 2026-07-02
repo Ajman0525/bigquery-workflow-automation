@@ -1,0 +1,121 @@
+diff --git a/automation.py b/automation_new.py
+index e5ebbfe..10284f4 100644
+--- a/automation.py
++++ b/automation_new.py
+@@ -128,7 +128,7 @@ class ConfigItem:
+ class EntityProjects:
+     bq_job_project: str
+     workflow_project: str
+-    parent_jobs_project: str = DEFAULT_PARENT_JOBS_PROJECT
++    parent_jobs_project: str | list[str] = DEFAULT_PARENT_JOBS_PROJECT
+     test_sp_dataset: str = DEFAULT_TEST_SP_DATASET
+ 
+ 
+@@ -140,7 +140,7 @@ class CloudSettings:
+     workflow_location: str
+     workflow_name: str
+     test_sp_dataset: str
+-    parent_jobs_project: str
++    parent_jobs_project: str | list[str]
+ 
+     @property
+     def queries_for_optimization_table(self) -> str:
+@@ -156,12 +156,14 @@ class CloudSettings:
+             f"{OPTIMIZATION_RESULTS_TABLE_NAME}"
+         )
+ 
+-    @property
+-    def parent_jobs_by_project(self) -> str:
+-        return (
+-            f"`{self.parent_jobs_project}.region-{self.bq_location}`"
+-            ".INFORMATION_SCHEMA.JOBS_BY_PROJECT"
+-        )
++    def parent_jobs_by_project_tables(self) -> list[str]:
++        projects = self.parent_jobs_project
++        if isinstance(projects, str):
++            projects = [projects]
++        return [
++            f"`{project}.region-{self.bq_location}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT"
++            for project in projects
++        ]
+ 
+ 
+ ENTITY_PROJECTS = {
+@@ -172,12 +174,16 @@ ENTITY_PROJECTS = {
+     "tenet": EntityProjects(
+         bq_job_project="thcdnadevdata",
+         workflow_project="thc-dna-dev-project",
+-        parent_jobs_project="thc-dna-prod-project",
++        parent_jobs_project=[
++            "thc-dna-prod-project",
++            "thcdnaproddata",
++            "thcdnaprodviews",
++        ],
+         test_sp_dataset="staging",
+     ),
+     "uspi": EntityProjects(
+-        bq_job_project="uspidnadevdata",
+-        workflow_project="uspi-dna-dev-project",
++        bq_job_project="thcdnadevdata",
++        workflow_project="thc-dna-dev-project",
+         parent_jobs_project="uspi-dna-prod-project",
+         test_sp_dataset="staging",
+     ),
+@@ -387,7 +393,10 @@ class ArtifactAutomation:
+             f"location={self.cloud_settings.bq_location}"
+         )
+         if item.has_parent_job_id:
+-            print(f"Would query parent job metadata from {self.cloud_settings.parent_jobs_by_project}")
++            print(
++                "Would query parent job metadata from "
++                f"{self.cloud_settings.parent_jobs_by_project_tables()}"
++            )
+         else:
+             print("Would skip parent job metadata lookup; no parent_job_id was provided")
+         print(f"Would query/write `{self.cloud_settings.queries_for_optimization_table}`")
+@@ -479,7 +488,7 @@ class ArtifactAutomation:
+         text = read_text(source)
+         text = text.replace("sample_parent_job_id", item.parent_job_id)
+         text = text.replace("sample_job_id", item.job_id)
+-        text = text.replace(PROD_JOBS_BY_PROJECT, self.cloud_settings.parent_jobs_by_project)
++        text = text.replace(PROD_JOBS_BY_PROJECT, self.cloud_settings.parent_jobs_by_project_tables()[0])
+         text = text.replace(
+             TABLE_QUERIES_FOR_OPTIMIZATION,
+             self.cloud_settings.queries_for_optimization_table,
+@@ -502,16 +511,26 @@ class ArtifactAutomation:
+         write_text(job_dir / "1_queries.sql", text)
+ 
+     def write_sp_details(self, job_dir: Path, item: ConfigItem) -> None:
+-        sql = f"""
+-            SELECT job_id, query
+-            FROM {self.cloud_settings.parent_jobs_by_project}
+-            WHERE job_id = @parent_job_id
+-            LIMIT 1
+-        """
+-        rows = self.query_rows(
+-            sql,
+-            [bigquery.ScalarQueryParameter("parent_job_id", "STRING", item.parent_job_id)],
+-        )
++        rows = None
++        for table in self.cloud_settings.parent_jobs_by_project_tables():
++            sql = f"""
++                SELECT job_id, query
++                FROM {table}
++                WHERE job_id = @parent_job_id
++                LIMIT 1
++            """
++            try:
++                rows = self.query_rows(
++                    sql,
++                    [bigquery.ScalarQueryParameter("parent_job_id", "STRING", item.parent_job_id)],
++                )
++                if rows and rows[0].get("query"):
++                    log.info("Found parent job in %s", table)
++                    break
++            except Exception as exc:
++                log.warning("Could not query %s for parent job: %s", table, exc)
++                rows = None
++
+         if not rows or not rows[0].get("query"):
+             raise AutomationError(f"No SP details query found for parent_job_id={item.parent_job_id}")
+         write_text(job_dir / "2_sp_details.sql", rows[0]["query"].strip() + "\n")

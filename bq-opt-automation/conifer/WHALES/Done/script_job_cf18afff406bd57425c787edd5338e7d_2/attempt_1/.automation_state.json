@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "config": {
+    "entity": "conifer",
+    "metric_name": "WHALES",
+    "parent_job_id": "d69aed7d-a3e7-4605-bdff-897839ff629c",
+    "job_id": "script_job_cf18afff406bd57425c787edd5338e7d_2",
+    "status_folder": "automated"
+  },
+  "attempt_number": 1,
+  "mode": "normal",
+  "completed_steps": [
+    "template",
+    "queries",
+    "sp_details",
+    "orig_sp",
+    "orig_query",
+    "optimized_query",
+    "exec_query",
+    "exec_details",
+    "opt_sp",
+    "update_results",
+    "test_sp"
+  ],
+  "workflow_triggered": false,
+  "created_at": "2026-06-16T18:50:46",
+  "updated_at": "2026-06-16T18:50:58",
+  "optimized_result": {
+    "created_at": "2026-04-20T17:40:44.593785"
+  }
+}

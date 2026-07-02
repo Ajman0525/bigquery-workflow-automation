@@ -1,0 +1,28 @@
+OPT_CREATED: 2026-04-20T18:25:08.565242
+
+
+ORIG:
+
+Elapsed time
+5.13 sec
+Slot time consumed 
+19 min 35.42 sec
+Bytes shuffled 
+9.76 MB
+Bytes spilled to disk 
+0 B
+
+
+---
+
+
+OPT: 
+
+Elapsed time
+5.8 sec
+Slot time consumed 
+23 min 55.97 sec
+Bytes shuffled 
+23.27 MB
+Bytes spilled to disk 
+0 B

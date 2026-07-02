@@ -1,0 +1,149 @@
+-- =================================================================================================
+-- Script to create and validate two temporary tables.
+-- Expected Outcome: The discrepancy and duplicate detail SELECTs should return zero rows.
+-- The final SELECT statement should return two summary rows with row_count = 0, confirming that
+-- V_TEMP_TABLE_ORIG and V_TEMP_TABLE_OPT produce identical distinct results and V_TEMP_TABLE_OPT
+-- has no duplicate rows.
+-- =================================================================================================
+-- 1. Stored Procedure Context
+-- =================================================================================================
+-- START STORED PROCEDURE CONTEXT
+-- Auto-generated from 2_sp_details.sql and 3_orig_sp.sql.
+-- No stored procedure context dependencies were detected.
+-- END STORED PROCEDURE CONTEXT
+
+-- =================================================================================================
+-- 2. Create the Original Temporary Table (V_TEMP_TABLE_ORIG)
+-- =================================================================================================
+CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_ORIG AS
+create table IF NOT EXISTS thcdnaproddata.aci.oredr_mnemonic_stg2 CLUSTER BY order_hss_id,ORDER_ID as	  
+  select * FROM   (
+  select s_o.HEALTH_SYSTEM_SOURCE_ID as order_hss_id, 
+       s_o.ORDER_ID as ORDER_ID, 
+	   s_o.ENCNTR_ID as ENCNTR_ID, 
+	   s_o.PERSON_ID as PERSON_ID, 
+	   s_o.ordered_as_mnemonic as ordered_as_mnemonic,
+	   s_o.ORDER_MNEMONIC as PRIMARY_MNEMONIC,
+	   s_o.CLINICAL_DISPLAY_LINE, 
+	   s_o.ORDER_DETAIL_DISPLAY_LINE 
+FROM thcdnaproddata.aci.oredr_mnemonic_stg1 stg1
+inner JOIN thcdnaproddata.cerner_ods.cerner_orders_hist s_o
+   on s_o.HEALTH_SYSTEM_SOURCE_ID = stg1.order_hss_id and
+	  s_o.ORDER_ID = stg1.ORDER_id 
+	  
+	UNION ALL
+	  
+	select s_o.HEALTH_SYSTEM_SOURCE_ID as order_hss_id, 
+       s_o.ORDER_ID as ORDER_ID, 
+	   s_o.ENCNTR_ID as ENCNTR_ID, 
+	   s_o.PERSON_ID as PERSON_ID, 
+	   s_o.ordered_as_mnemonic as ordered_as_mnemonic,
+	   s_o.ORDER_MNEMONIC as PRIMARY_MNEMONIC,
+	   s_o.CLINICAL_DISPLAY_LINE, 
+	   s_o.ORDER_DETAIL_DISPLAY_LINE 
+FROM thcdnaproddata.aci.oredr_mnemonic_stg1 stg1
+inner JOIN thcdnaproddata.cerner_ods.dmc_orders_hist s_o
+   on s_o.HEALTH_SYSTEM_SOURCE_ID = stg1.order_hss_id and
+	  s_o.ORDER_ID = stg1.ORDER_id 
+	  
+	  ) as foo;
+
+-- =================================================================================================
+-- 3. Create the Optimized Temporary Table (V_TEMP_TABLE_OPT)
+-- =================================================================================================
+CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_OPT AS
+CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.oredr_mnemonic_stg2
+CLUSTER BY order_hss_id, ORDER_ID AS
+WITH all_orders_history AS (
+    -- Combine the two history tables first to avoid multiple scans of the joining table
+    SELECT
+        HEALTH_SYSTEM_SOURCE_ID,
+        ORDER_ID,
+        ENCNTR_ID,
+        PERSON_ID,
+        ordered_as_mnemonic,
+        ORDER_MNEMONIC,
+        CLINICAL_DISPLAY_LINE,
+        ORDER_DETAIL_DISPLAY_LINE
+    FROM
+        thcdnaproddata.cerner_ods.cerner_orders_hist
+    UNION ALL
+    SELECT
+        HEALTH_SYSTEM_SOURCE_ID,
+        ORDER_ID,
+        ENCNTR_ID,
+        PERSON_ID,
+        ordered_as_mnemonic,
+        ORDER_MNEMONIC,
+        CLINICAL_DISPLAY_LINE,
+        ORDER_DETAIL_DISPLAY_LINE
+    FROM
+        thcdnaproddata.cerner_ods.dmc_orders_hist
+)
+-- Join the combined history with the staging table once
+SELECT
+    s_o.HEALTH_SYSTEM_SOURCE_ID AS order_hss_id,
+    s_o.ORDER_ID,
+    s_o.ENCNTR_ID,
+    s_o.PERSON_ID,
+    s_o.ordered_as_mnemonic,
+    s_o.ORDER_MNEMONIC AS PRIMARY_MNEMONIC,
+    s_o.CLINICAL_DISPLAY_LINE,
+    s_o.ORDER_DETAIL_DISPLAY_LINE
+FROM
+    thcdnaproddata.aci.oredr_mnemonic_stg1 AS stg1
+INNER JOIN
+    all_orders_history AS s_o
+    ON stg1.order_hss_id = s_o.HEALTH_SYSTEM_SOURCE_ID
+   AND stg1.ORDER_id = s_o.ORDER_ID;
+
+-- =================================================================================================
+-- 4. Validation Step: Compare the two tables and check optimized duplicates.
+-- DISCREPANCY counts distinct rows that appear in one table but not the other.
+-- DUPLICATE ROWS counts extra copies of duplicate rows in V_TEMP_TABLE_OPT.
+-- The first two SELECT statements show the actual rows when discrepancies or duplicates exist.
+-- The final SELECT statement shows only the summary counts.
+-- =================================================================================================
+CREATE OR REPLACE TEMP TABLE V_VALIDATION_DISCREPANCIES AS
+(SELECT 'ONLY IN ORIGINAL' AS validation_diff_type, *
+ FROM V_TEMP_TABLE_ORIG
+ EXCEPT DISTINCT
+ SELECT 'ONLY IN ORIGINAL' AS validation_diff_type, *
+ FROM V_TEMP_TABLE_OPT
+)
+UNION ALL
+(SELECT 'ONLY IN OPTIMIZED' AS validation_diff_type, *
+ FROM V_TEMP_TABLE_OPT
+ EXCEPT DISTINCT
+ SELECT 'ONLY IN OPTIMIZED' AS validation_diff_type, *
+ FROM V_TEMP_TABLE_ORIG
+);
+
+CREATE OR REPLACE TEMP TABLE V_VALIDATION_OPT_DUPLICATES AS
+SELECT duplicate_row.*
+FROM (
+  SELECT ANY_VALUE(opt) AS duplicate_row
+  FROM V_TEMP_TABLE_OPT AS opt
+  GROUP BY TO_JSON_STRING(opt)
+  HAVING COUNT(*) > 1
+);
+
+-- View discrepancy rows.
+SELECT *
+FROM V_VALIDATION_DISCREPANCIES;
+
+-- View duplicate rows from the optimized query.
+SELECT *
+FROM V_VALIDATION_OPT_DUPLICATES;
+
+-- View summary counts.
+SELECT 'DISCREPANCY' AS validation_check, COUNT(*) AS row_count
+FROM V_VALIDATION_DISCREPANCIES
+UNION ALL
+SELECT 'DUPLICATE ROWS' AS validation_check, COALESCE(SUM(row_count - 1), 0) AS row_count
+FROM (
+  SELECT COUNT(*) AS row_count
+  FROM V_TEMP_TABLE_OPT AS opt
+  GROUP BY TO_JSON_STRING(opt)
+  HAVING COUNT(*) > 1
+);

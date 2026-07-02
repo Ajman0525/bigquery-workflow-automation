@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "config": {
+    "entity": "tenet",
+    "metric_name": "WHALES",
+    "parent_job_id": "8c118861-1ae3-439b-b270-2a0af61dd182",
+    "job_id": "script_job_6805c57147be119090174b4153097941_22",
+    "status_folder": "automated"
+  },
+  "attempt_number": 2,
+  "mode": "rerun",
+  "completed_steps": [
+    "template",
+    "queries",
+    "sp_details",
+    "orig_sp",
+    "orig_query",
+    "optimized_query",
+    "exec_query",
+    "exec_details",
+    "opt_sp",
+    "update_results",
+    "test_sp"
+  ],
+  "workflow_triggered": true,
+  "created_at": "2026-07-01T00:35:27",
+  "updated_at": "2026-07-01T00:49:11",
+  "rerun_started_at": "2026-06-30T11:36:34.654141",
+  "workflow_execution_name": "projects/789218622476/locations/us-central1/workflows/bq_query_optimisation_workflow/executions/43e1ad26-95b1-4017-a876-564863648ea3",
+  "optimized_result": {
+    "created_at": "2026-06-30T11:41:27.498628"
+  }
+}
