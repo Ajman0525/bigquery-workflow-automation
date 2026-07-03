@@ -1,4 +1,4 @@
-CREATE PROCEDURE thcdnaproddata.aci.sp_ade_report_lab_ade_types(OUT OUT_PARAM INT64)
+CREATE OR REPLACE PROCEDURE `thcdnadevdata.aci.sp_ade_report_lab_ade_types_optim`(OUT OUT_PARAM INT64)
 BEGIN
 
 -- declare OUT_PARAM BOOL;
@@ -17,21 +17,21 @@ BEGIN
 BEGIN
 SET v_proc  = 'SP_ADE_REPORT_LAB_ADE_TYPES';
 SET v_count = 0;
-drop table IF EXISTS thcdnaproddata.aci.ade_lab1_lab2_tmp;
-drop table IF EXISTS thcdnaproddata.aci.t_ade_fact_med1;
-drop table IF EXISTS thcdnaproddata.aci.t_ade_fact_med2;
-drop table IF EXISTS thcdnaproddata.aci.t_ade_fact_med3;
-drop table IF EXISTS thcdnaproddata.aci.t_ade_report1;
-drop table IF EXISTS thcdnaproddata.aci.t_ade_report2;
-drop table IF EXISTS thcdnaproddata.aci.t_ade_report_lab_final;
+drop table IF EXISTS thcdnadevdata.aci.ade_lab1_lab2_tmp;
+drop table IF EXISTS thcdnadevdata.aci.t_ade_fact_med1;
+drop table IF EXISTS thcdnadevdata.aci.t_ade_fact_med2;
+drop table IF EXISTS thcdnadevdata.aci.t_ade_fact_med3;
+drop table IF EXISTS thcdnadevdata.aci.t_ade_report1;
+drop table IF EXISTS thcdnadevdata.aci.t_ade_report2;
+drop table IF EXISTS thcdnadevdata.aci.t_ade_report_lab_final;
 
 
 --STEP-1
-create table IF NOT EXISTS thcdnaproddata.aci.ade_lab1_lab2_tmp as 
+create table IF NOT EXISTS thcdnadevdata.aci.ade_lab1_lab2_tmp as 
 SELECT  t.ADE_TYPE_DK as ADE_TYPE_SK,t.ADE_NAME,t.DRUG_NAME as DRUG_NAME, t.EVENT_NAME, t.EVENT_TYPE, ar.ADE_HSS_ID, ar.LAB_PRIMARY_ORDERABLE, ar.LAB_EVENT_DISPLAY
 ,'M1' as MED_TYPE
-FROM thcdnaproddata.aci.dw_ade_ref ar
-inner JOIN thcdnaproddata.aci.dim_ade_type t
+FROM thcdnadevdata.aci.dw_ade_ref ar
+inner JOIN thcdnadevdata.aci.dim_ade_type t
  on t.EVENT_NAME = ar.ADE_NAME	
 WHERE 
       ar.ACTIVE_IND = 1 and 
@@ -41,12 +41,12 @@ WHERE
 UNION DISTINCT
 SELECT  t.ADE_TYPE_DK as ADE_TYPE_SK,t.ADE_NAME,t.DRUG_NAME, t.EVENT_NAME as EVENT_NAME, t.EVENT_TYPE, ar.ADE_HSS_ID, ar.MLTM_CATEGORY_NAME, 
         IFNULL(ar.MLTM_DRUG_IDENTIFIER, mr.MLTM_DRUG_IDENTIFIER) as MLTM_DRUG_IDENTIFIER,'M2' as MED_TYPE
-FROM thcdnaproddata.aci.dw_ade_ref ar --Looks like its a one time load
-inner JOIN thcdnaproddata.aci.dw_mltm_ref mr --(Staging Table for this table are not used in IDM)
+FROM thcdnadevdata.aci.dw_ade_ref ar --Looks like its a one time load
+inner JOIN thcdnadevdata.aci.dw_mltm_ref mr --(Staging Table for this table are not used in IDM)
   on ar.ADE_HSS_ID = mr.MLTM_HSS_ID and
      ar.MLTM_CATEGORY_NAME = mr.MLTM_CATEGORY_NAME and
 	 mr.ACTIVE_IND = 1 
-	 inner JOIN thcdnaproddata.aci.dim_ade_type t
+	 inner JOIN thcdnadevdata.aci.dim_ade_type t
  on t.DRUG_NAME = ar.ADE_NAME	
 WHERE 
       ar.ACTIVE_IND = 1  
@@ -55,10 +55,10 @@ WHERE
 
 
 
-create table IF NOT EXISTS thcdnaproddata.aci.t_ade_fact_med1 CLUSTER BY DIM_ORDER_SK as 
+create table IF NOT EXISTS thcdnadevdata.aci.t_ade_fact_med1 CLUSTER BY DIM_ORDER_SK as 
 select  t.ADE_TYPE_SK,t.ADE_NAME,t.DRUG_NAME, t.EVENT_NAME, t.EVENT_TYPE,dm.DIM_ORDER_SK,dm.ORDER_DESC,dm.ORDER_NM
-			  FROM thcdnaproddata.idm.dim_order dm
-				inner JOIN thcdnaproddata.aci.ade_lab1_lab2_tmp t
+			  FROM thcdnadevdata.idm.dim_order dm
+				inner JOIN thcdnadevdata.aci.ade_lab1_lab2_tmp t
 				    on  upper(t.LAB_PRIMARY_ORDERABLE) = upper(ORDER_NM) 	
 				/*inner join IDM..DIM_RESULT_TYPE_ADE rt 
 				    --on (upper(RESULT_NM) =upper(LAB_PRIMARY_ORDERABLE) )	   
@@ -67,19 +67,19 @@ select  t.ADE_TYPE_SK,t.ADE_NAME,t.DRUG_NAME, t.EVENT_NAME, t.EVENT_TYPE,dm.DIM_
 					where t.MED_TYPE='M1' --and ADE_TYPE_SK=4
 UNION DISTINCT			
 select  t.ADE_TYPE_SK,t.ADE_NAME,t.DRUG_NAME, t.EVENT_NAME, t.EVENT_TYPE,dm.DIM_ORDER_SK,dm.ORDER_DESC,dm.ORDER_NM
-			  FROM thcdnaproddata.idm.dim_order dm
-				inner JOIN thcdnaproddata.aci.ade_lab1_lab2_tmp t
+			  FROM thcdnadevdata.idm.dim_order dm
+				inner JOIN thcdnadevdata.aci.ade_lab1_lab2_tmp t
 				    on (upper(t.LAB_EVENT_DISPLAY) = upper(ORDER_NM) --OR LAB_EVENT_DISPLAY is NULL
 					)
 					where t.MED_TYPE='M1';
 
 					
-create table IF NOT EXISTS thcdnaproddata.aci.t_ade_fact_med2 AS
+create table IF NOT EXISTS thcdnadevdata.aci.t_ade_fact_med2 AS
 select DIM_ORDER_SK,ADE_TYPE_SK,ADE_NAME,DRUG_NAME,EVENT_NAME,EVENT_TYPE FROM (
 select  t.ADE_TYPE_SK,t.ADE_NAME,t.DRUG_NAME, t.EVENT_NAME, t.EVENT_TYPE,DIM_ORDER_SK,ORDER_DESC,ORDER_NM
 		,row_number()over (partition by DIM_ORDER_SK order by 1) as rn
-FROM thcdnaproddata.aci.ade_lab1_lab2_tmp t	
-inner JOIN thcdnaproddata.idm.dim_order dm 
+FROM thcdnadevdata.aci.ade_lab1_lab2_tmp t	
+inner JOIN thcdnadevdata.idm.dim_order dm 
 on t.LAB_EVENT_DISPLAY = dm.multum_cd --LAB_EVENT_DISPLAY is MULTUM DRUG IDENTIFIER
 where MED_TYPE='M2'
 ) as foo where rn=1	
@@ -89,26 +89,26 @@ where MED_TYPE='M2'
 
 --STEP:3
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.t_ade_fact_med3 as 
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.t_ade_fact_med3 as 
 select fo.patient_account_nbr,fo.facility_cd 
-FROM thcdnaproddata.aci.t_ade_fact_med1 t
-inner JOIN thcdnaproddata.idm.fact_order fo
+FROM thcdnadevdata.aci.t_ade_fact_med1 t
+inner JOIN thcdnadevdata.idm.fact_order fo
 on t.dim_order_sk = fo.dim_order_sk 
 --WHERE fo.facility_cd='AHD'
 
 INTERSECT DISTINCT
 select fo.patient_account_nbr,fo.facility_cd
-FROM thcdnaproddata.aci.t_ade_fact_med2 t
-inner JOIN thcdnaproddata.idm.fact_order fo
+FROM thcdnadevdata.aci.t_ade_fact_med2 t
+inner JOIN thcdnadevdata.idm.fact_order fo
 on t.dim_order_sk = fo.dim_order_sk
 --WHERE fo.facility_cd='AHD'
 ;
 
 
-drop table IF EXISTS thcdnaproddata.aci.t_ade_report_stging_lab1;
+drop table IF EXISTS thcdnadevdata.aci.t_ade_report_stging_lab1;
 
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.t_ade_report_stging_lab1
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.t_ade_report_stging_lab1
 CLUSTER BY hss_id, ENCNTR_ID AS
 WITH
   clinical_events AS (
@@ -127,7 +127,7 @@ WITH
       NORMALCY_CD,
       RESULT_VAL,
       updt_dt_tm
-    FROM thcdnaproddata.cerner_ods.cerner_clinical_event_hist
+    FROM thcdnadevdata.cerner_ods.cerner_clinical_event_hist
     WHERE VALID_UNTIL_DT_TM > CURRENT_DATETIME('America/Chicago')
       AND EVENT_RELTN_CD IN (132, 135)
       AND RESULT_STATUS_CD IN (23, 25)
@@ -140,7 +140,7 @@ WITH
     SELECT
       HEALTH_SYSTEM_SOURCE_ID,
       ORDER_ID
-    FROM thcdnaproddata.cerner_ods.cerner_orders_hist
+    FROM thcdnadevdata.cerner_ods.cerner_orders_hist
     WHERE CATALOG_TYPE_CD = 2513
   ),
   ade_ref AS (
@@ -149,7 +149,7 @@ WITH
       ADE_NAME,
       LAB_PRIMARY_ORDERABLE,
       LAB_EVENT_DISPLAY
-    FROM thcdnaproddata.aci.dw_ade_ref
+    FROM thcdnadevdata.aci.dw_ade_ref
     WHERE ADE_TYPE = 'Laboratory'
       AND ACTIVE_IND = 1
   )
@@ -179,10 +179,10 @@ FROM clinical_events AS s_ce
 INNER JOIN orders AS s_o
   ON s_o.HEALTH_SYSTEM_SOURCE_ID = s_ce.HEALTH_SYSTEM_SOURCE_ID
   AND s_o.ORDER_ID = s_ce.ORDER_ID
-INNER JOIN thcdnaproddata.aci.dw_code_value AS cv
+INNER JOIN thcdnadevdata.aci.dw_code_value AS cv
   ON cv.CODE_VALUE_HSS_ID = s_ce.HEALTH_SYSTEM_SOURCE_ID
   AND cv.CODE_VALUE_SK = s_ce.CATALOG_CD
-INNER JOIN thcdnaproddata.aci.dw_code_value AS cv1
+INNER JOIN thcdnadevdata.aci.dw_code_value AS cv1
   ON cv1.CODE_VALUE_HSS_ID = s_ce.HEALTH_SYSTEM_SOURCE_ID
   AND cv1.CODE_VALUE_SK = s_ce.EVENT_CD
 INNER JOIN ade_ref AS ar
@@ -197,11 +197,11 @@ INNER JOIN ade_ref AS ar
   );
 	  
 
-drop table IF EXISTS thcdnaproddata.aci.t_ade_report_stging_lab2;
+drop table IF EXISTS thcdnadevdata.aci.t_ade_report_stging_lab2;
 
 
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.t_ade_report_stging_lab2 CLUSTER BY FACILITY_CD AS
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.t_ade_report_stging_lab2 CLUSTER BY FACILITY_CD AS
 	SELECT 
 		HSS_ID
        , EVENT_ID
@@ -232,17 +232,17 @@ CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.t_ade_report_stging_lab2 CLUSTER B
 			END as FACILITY_CD
        ,PATIENT_ACCOUNT_NBR FROM 	  (
 	  SELECT s_ce.*,upper(trim(substr(cv2.DISPLAY,1,3))) as FACILITY_CD,
-      replace(UPPER(TRIM(Ltrim(s_eah.ALIAS,'0' ))),'\\\\\\\\','\\') as Patient_Account_Nbr FROM thcdnaproddata.aci.t_ade_report_stging_lab1 s_ce
-	  INNER JOIN thcdnaproddata.cerner_ods.cerner_encounter_hist s_eh
+      replace(UPPER(TRIM(Ltrim(s_eah.ALIAS,'0' ))),'\\\\\\\\','\\') as Patient_Account_Nbr FROM thcdnadevdata.aci.t_ade_report_stging_lab1 s_ce
+	  INNER JOIN thcdnadevdata.cerner_ods.cerner_encounter_hist s_eh
       ON s_eh.HEALTH_SYSTEM_SOURCE_ID = s_ce.hss_id and
       s_eh.ENCNTR_ID = s_ce.ENCNTR_ID and
 	  
 	  s_eh.ACTIVE_IND = 1	
-INNER JOIN thcdnaproddata.cerner_ods.cerner_code_value_hist cv2
+INNER JOIN thcdnadevdata.cerner_ods.cerner_code_value_hist cv2
 ON s_eh.HEALTH_SYSTEM_SOURCE_ID = cv2.HEALTH_SYSTEM_SOURCE_ID and
 		cv2.CODE_VALUE = s_eh.LOC_FACILITY_CD and
 		cv2.CODE_SET = 220 	
-INNER JOIN thcdnaproddata.cerner_ods.cerner_encntr_alias_hist s_eah
+INNER JOIN thcdnadevdata.cerner_ods.cerner_encntr_alias_hist s_eah
 ON s_eah.HEALTH_SYSTEM_SOURCE_ID = s_eh.HEALTH_SYSTEM_SOURCE_ID and
 		s_eah.ENCNTR_ID = s_eh.ENCNTR_ID AND
 		s_eah.ACTIVE_IND = 1 and
@@ -250,9 +250,9 @@ ON s_eah.HEALTH_SYSTEM_SOURCE_ID = s_eh.HEALTH_SYSTEM_SOURCE_ID and
 		s_eah.ENCNTR_ALIAS_TYPE_CD = 1077
 		) as foo;	
 
-drop table IF EXISTS thcdnaproddata.aci.t_ade_report_stging_final;
+drop table IF EXISTS thcdnadevdata.aci.t_ade_report_stging_final;
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.t_ade_report_stging_final AS		
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.t_ade_report_stging_final AS		
 	SELECT HSS_ID
        , EVENT_ID
        , ORDER_ID
@@ -291,16 +291,15 @@ CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.t_ade_report_stging_final AS
        , ODS_PROCESS_DT_TM
        , stg.FACILITY_CD
        ,replace(IFNULL(PREFIX,'')||PATIENT_ACCOUNT_NBR,'\\\\\\\\','\\') as PATIENT_ACCOUNT_NBR
-  FROM thcdnaproddata.aci.t_ade_report_stging_lab2 stg
-  LEFT JOIN thcdnaproddata.clinical_ops.dim_facility_prefix fp
+  FROM thcdnadevdata.aci.t_ade_report_stging_lab2 stg
+  LEFT JOIN thcdnadevdata.clinical_ops.dim_facility_prefix fp
   ON stg.FACILITY_CD = fp.FACILITY_CD;
 
   
-drop table IF EXISTS thcdnaproddata.aci.ordering_physician_stg;  
+drop table IF EXISTS thcdnadevdata.aci.ordering_physician_stg;  
 
 
--- START OPTIMIZED QUERY
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.ordering_physician_stg
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.ordering_physician_stg
 CLUSTER BY hss_id, order_id AS
 WITH cerner_data AS (
   SELECT DISTINCT
@@ -308,12 +307,12 @@ WITH cerner_data AS (
     o.health_system_source_id AS hss_id,
     p.name_full_formatted AS ordering_physician
   FROM
-    `thcdnaproddata.cerner_ods.cerner_orders_hist` AS o
+    `thcdnadevdata.cerner_ods.cerner_orders_hist` AS o
   INNER JOIN
-    `thcdnaproddata.cerner_ods.cerner_order_action_hist` AS oa
+    `thcdnadevdata.cerner_ods.cerner_order_action_hist` AS oa
     ON o.order_id = oa.order_id AND o.health_system_source_id = oa.health_system_source_id
   INNER JOIN
-    `thcdnaproddata.cerner_ods.cerner_prsnl_hist` AS p
+    `thcdnadevdata.cerner_ods.cerner_prsnl_hist` AS p
     ON oa.order_provider_id = p.person_id
   WHERE
     oa.action_sequence = 1
@@ -321,7 +320,7 @@ WITH cerner_data AS (
     -- Replaced INNER JOIN to 'cv' with a more efficient EXISTS subquery to act as a filter
     AND EXISTS (
       SELECT 1
-      FROM `thcdnaproddata.cerner_ods.cerner_code_value_hist` AS cv
+      FROM `thcdnadevdata.cerner_ods.cerner_code_value_hist` AS cv
       WHERE
         cv.code_value = oa.action_type_cd
         AND cv.health_system_source_id = oa.health_system_source_id
@@ -330,7 +329,7 @@ WITH cerner_data AS (
     -- Replaced filtering INNER JOIN to 'f' with a more efficient EXISTS subquery
     AND EXISTS (
       SELECT 1
-      FROM `thcdnaproddata.cerner_ods.cerner_code_value_hist` AS f
+      FROM `thcdnadevdata.cerner_ods.cerner_code_value_hist` AS f
       WHERE
         f.code_value = p.position_cd
         AND f.health_system_source_id = p.health_system_source_id
@@ -342,12 +341,12 @@ dmc_data AS (
     o.health_system_source_id AS hss_id,
     p.name_full_formatted AS ordering_physician
   FROM
-    `thcdnaproddata.cerner_ods.dmc_orders_hist` AS o
+    `thcdnadevdata.cerner_ods.dmc_orders_hist` AS o
   INNER JOIN
-    `thcdnaproddata.cerner_ods.dmc_order_action_hist` AS oa
+    `thcdnadevdata.cerner_ods.dmc_order_action_hist` AS oa
     ON o.order_id = oa.order_id AND o.health_system_source_id = oa.health_system_source_id
   INNER JOIN
-    `thcdnaproddata.cerner_ods.dmc_prsnl_hist` AS p
+    `thcdnadevdata.cerner_ods.dmc_prsnl_hist` AS p
     ON oa.order_provider_id = p.person_id
   WHERE
     oa.action_sequence = 1
@@ -355,7 +354,7 @@ dmc_data AS (
     -- Replaced INNER JOIN to 'cv' with a more efficient EXISTS subquery to act as a filter
     AND EXISTS (
       SELECT 1
-      FROM `thcdnaproddata.cerner_ods.dmc_code_value_hist` AS cv
+      FROM `thcdnadevdata.cerner_ods.dmc_code_value_hist` AS cv
       WHERE
         cv.code_value = oa.action_type_cd
         AND cv.health_system_source_id = oa.health_system_source_id
@@ -364,7 +363,7 @@ dmc_data AS (
     -- Replaced filtering INNER JOIN to 'f' with a more efficient EXISTS subquery
     AND EXISTS (
       SELECT 1
-      FROM `thcdnaproddata.cerner_ods.dmc_code_value_hist` AS f
+      FROM `thcdnadevdata.cerner_ods.dmc_code_value_hist` AS f
       WHERE
         f.code_value = p.position_cd
         AND f.health_system_source_id = p.health_system_source_id
@@ -372,19 +371,18 @@ dmc_data AS (
 )
 SELECT order_id, hss_id, ordering_physician FROM cerner_data
 UNION ALL
-SELECT order_id, hss_id, ordering_physician FROM dmc_data;
--- END OPTIMIZED QUERY;  
+SELECT order_id, hss_id, ordering_physician FROM dmc_data;  
 
-drop table IF EXISTS thcdnaproddata.aci.oredr_mnemonic_stg1;  
+drop table IF EXISTS thcdnadevdata.aci.oredr_mnemonic_stg1;  
 
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.oredr_mnemonic_stg1 CLUSTER BY order_hss_id,ORDER_ID AS
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.oredr_mnemonic_stg1 CLUSTER BY order_hss_id,ORDER_ID AS
 select * FROM (
 select DISTINCT 
        	   s_o.HEALTH_SYSTEM_SOURCE_ID as order_hss_id,
 		   s_o.ORDER_ID as ORDER_ID 
-	FROM thcdnaproddata.cerner_ods.cerner_orders_hist s_o	
-	LEFT JOIN thcdnaproddata.cerner_ods.cerner_order_action_hist s_oa
+	FROM thcdnadevdata.cerner_ods.cerner_orders_hist s_o	
+	LEFT JOIN thcdnadevdata.cerner_ods.cerner_order_action_hist s_oa
       on s_oa.HEALTH_SYSTEM_SOURCE_ID = s_o.HEALTH_SYSTEM_SOURCE_ID and
 	     s_oa.ORDER_ID = s_o.ORDER_ID and
 	     s_oa.ACTION_TYPE_CD = 2534 
@@ -397,8 +395,8 @@ select DISTINCT
 	select DISTINCT 
        	   s_o.HEALTH_SYSTEM_SOURCE_ID as order_hss_id,
 		   s_o.ORDER_ID as ORDER_ID 
-	FROM thcdnaproddata.cerner_ods.dmc_orders_hist s_o	
-	LEFT JOIN thcdnaproddata.cerner_ods.dmc_order_action_hist s_oa
+	FROM thcdnadevdata.cerner_ods.dmc_orders_hist s_o	
+	LEFT JOIN thcdnadevdata.cerner_ods.dmc_order_action_hist s_oa
       on s_oa.HEALTH_SYSTEM_SOURCE_ID = s_o.HEALTH_SYSTEM_SOURCE_ID and
 	     s_oa.ORDER_ID = s_o.ORDER_ID and
 	     s_oa.ACTION_TYPE_CD = 2534
@@ -407,9 +405,9 @@ select DISTINCT
 	      s_o.ORIG_ORD_AS_FLAG in (0,1,2)	  
 	)as foo;
 		  
-drop table IF EXISTS thcdnaproddata.aci.oredr_mnemonic_stg2; 
+drop table IF EXISTS thcdnadevdata.aci.oredr_mnemonic_stg2; 
 
-create table IF NOT EXISTS thcdnaproddata.aci.oredr_mnemonic_stg2 CLUSTER BY order_hss_id,ORDER_ID as	  
+create table IF NOT EXISTS thcdnadevdata.aci.oredr_mnemonic_stg2 CLUSTER BY order_hss_id,ORDER_ID as	  
   select * FROM   (
   select s_o.HEALTH_SYSTEM_SOURCE_ID as order_hss_id, 
        s_o.ORDER_ID as ORDER_ID, 
@@ -419,8 +417,8 @@ create table IF NOT EXISTS thcdnaproddata.aci.oredr_mnemonic_stg2 CLUSTER BY ord
 	   s_o.ORDER_MNEMONIC as PRIMARY_MNEMONIC,
 	   s_o.CLINICAL_DISPLAY_LINE, 
 	   s_o.ORDER_DETAIL_DISPLAY_LINE 
-FROM thcdnaproddata.aci.oredr_mnemonic_stg1 stg1
-inner JOIN thcdnaproddata.cerner_ods.cerner_orders_hist s_o
+FROM thcdnadevdata.aci.oredr_mnemonic_stg1 stg1
+inner JOIN thcdnadevdata.cerner_ods.cerner_orders_hist s_o
    on s_o.HEALTH_SYSTEM_SOURCE_ID = stg1.order_hss_id and
 	  s_o.ORDER_ID = stg1.ORDER_id 
 	  
@@ -434,8 +432,8 @@ inner JOIN thcdnaproddata.cerner_ods.cerner_orders_hist s_o
 	   s_o.ORDER_MNEMONIC as PRIMARY_MNEMONIC,
 	   s_o.CLINICAL_DISPLAY_LINE, 
 	   s_o.ORDER_DETAIL_DISPLAY_LINE 
-FROM thcdnaproddata.aci.oredr_mnemonic_stg1 stg1
-inner JOIN thcdnaproddata.cerner_ods.dmc_orders_hist s_o
+FROM thcdnadevdata.aci.oredr_mnemonic_stg1 stg1
+inner JOIN thcdnadevdata.cerner_ods.dmc_orders_hist s_o
    on s_o.HEALTH_SYSTEM_SOURCE_ID = stg1.order_hss_id and
 	  s_o.ORDER_ID = stg1.ORDER_id 
 	  
@@ -443,11 +441,11 @@ inner JOIN thcdnaproddata.cerner_ods.dmc_orders_hist s_o
 
 --NURSING UNIT 06142019
 
-drop table IF EXISTS thcdnaproddata.aci.ade_med_admin_nurse_unit_tmp;
+drop table IF EXISTS thcdnadevdata.aci.ade_med_admin_nurse_unit_tmp;
 
 
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.ade_med_admin_nurse_unit_tmp 
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.ade_med_admin_nurse_unit_tmp 
 CLUSTER BY hss_id, nursing_unit_location AS
 WITH cerner_events AS (
   SELECT
@@ -466,11 +464,11 @@ WITH cerner_events AS (
     s_ce.performed_prsnl_id,
     nurse_unit_cd.nurse_unit_cd,
     nurse_unit_cd1.display AS nursing_unit_location
-  FROM thcdnaproddata.cerner_ods.cerner_clinical_event_hist AS s_ce
-  LEFT JOIN thcdnaproddata.cerner_ods.cerner_med_admin_event_hist AS nurse_unit_cd
+  FROM thcdnadevdata.cerner_ods.cerner_clinical_event_hist AS s_ce
+  LEFT JOIN thcdnadevdata.cerner_ods.cerner_med_admin_event_hist AS nurse_unit_cd
     ON nurse_unit_cd.health_system_source_id = s_ce.health_system_source_id
     AND nurse_unit_cd.event_id = s_ce.event_id
-  LEFT JOIN thcdnaproddata.cerner_ods.cerner_code_value_hist AS nurse_unit_cd1
+  LEFT JOIN thcdnadevdata.cerner_ods.cerner_code_value_hist AS nurse_unit_cd1
     ON nurse_unit_cd.health_system_source_id = nurse_unit_cd1.health_system_source_id
     AND nurse_unit_cd.nurse_unit_cd = nurse_unit_cd1.code_value
   WHERE s_ce.VALID_UNTIL_DT_TM > CURRENT_DATETIME('America/Chicago')
@@ -480,7 +478,7 @@ WITH cerner_events AS (
     AND s_ce.event_end_dt_tm >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 2 YEAR), YEAR)
     AND EXISTS (
       SELECT 1
-      FROM thcdnaproddata.cerner_ods.cerner_orders_hist AS s_o
+      FROM thcdnadevdata.cerner_ods.cerner_orders_hist AS s_o
       WHERE s_o.HEALTH_SYSTEM_SOURCE_ID = s_ce.HEALTH_SYSTEM_SOURCE_ID
         AND s_o.ORDER_ID = s_ce.ORDER_ID
         AND s_o.CATALOG_TYPE_CD = 2516
@@ -503,11 +501,11 @@ dmc_events AS (
     s_ce.performed_prsnl_id,
     nurse_unit_cd.nurse_unit_cd,
     nurse_unit_cd1.display AS nursing_unit_location
-  FROM thcdnaproddata.cerner_ods.dmc_clinical_event_hist AS s_ce
-  LEFT JOIN thcdnaproddata.cerner_ods.dmc_med_admin_event_hist AS nurse_unit_cd
+  FROM thcdnadevdata.cerner_ods.dmc_clinical_event_hist AS s_ce
+  LEFT JOIN thcdnadevdata.cerner_ods.dmc_med_admin_event_hist AS nurse_unit_cd
     ON nurse_unit_cd.health_system_source_id = s_ce.health_system_source_id
     AND nurse_unit_cd.event_id = s_ce.event_id
-  LEFT JOIN thcdnaproddata.cerner_ods.dmc_code_value_hist AS nurse_unit_cd1
+  LEFT JOIN thcdnadevdata.cerner_ods.dmc_code_value_hist AS nurse_unit_cd1
     ON nurse_unit_cd.health_system_source_id = nurse_unit_cd1.health_system_source_id
     AND nurse_unit_cd.nurse_unit_cd = nurse_unit_cd1.code_value
   WHERE s_ce.VALID_UNTIL_DT_TM > CURRENT_DATETIME('America/Chicago')
@@ -517,7 +515,7 @@ dmc_events AS (
     AND s_ce.event_end_dt_tm >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 2 YEAR), YEAR)
     AND EXISTS (
       SELECT 1
-      FROM thcdnaproddata.cerner_ods.dmc_orders_hist AS s_o
+      FROM thcdnadevdata.cerner_ods.dmc_orders_hist AS s_o
       WHERE s_o.HEALTH_SYSTEM_SOURCE_ID = s_ce.HEALTH_SYSTEM_SOURCE_ID
         AND s_o.ORDER_ID = s_ce.ORDER_ID
         AND s_o.CATALOG_TYPE_CD = 1227
@@ -528,10 +526,10 @@ UNION ALL
 SELECT * FROM dmc_events;
 
 
-drop table IF EXISTS thcdnaproddata.aci.cerner_dmc_prsnl_all;
+drop table IF EXISTS thcdnadevdata.aci.cerner_dmc_prsnl_all;
 
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.cerner_dmc_prsnl_all AS
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.cerner_dmc_prsnl_all AS
 select p.HEALTH_SYSTEM_SOURCE_ID,p.PERSON_ID,substr(p.NAME_FIRST,1,100) as PERSONNEL_FIRST_NAME
 			   ,substr(p.NAME_LAST,1,100) as PERSONNEL_LAST_NAME
 			   ,p.NAME_FULL_FORMATTED as PERSONNEL_FULL_NAME
@@ -539,7 +537,7 @@ select p.HEALTH_SYSTEM_SOURCE_ID,p.PERSON_ID,substr(p.NAME_FIRST,1,100) as PERSO
 			   ,p.ACTIVE_IND 	
 			   ,p.POSITION_CD
 				
-FROM thcdnaproddata.cerner_ods.cerner_prsnl_hist p 	
+FROM thcdnadevdata.cerner_ods.cerner_prsnl_hist p 	
 UNION DISTINCT
 select p.HEALTH_SYSTEM_SOURCE_ID,p.PERSON_ID,substr(p.NAME_FIRST,1,100) as PERSONNEL_FIRST_NAME
 			   ,substr(p.NAME_LAST,1,100) as PERSONNEL_LAST_NAME
@@ -548,25 +546,25 @@ select p.HEALTH_SYSTEM_SOURCE_ID,p.PERSON_ID,substr(p.NAME_FIRST,1,100) as PERSO
 			   ,p.ACTIVE_IND 	
 			   ,p.POSITION_CD
 				
-FROM thcdnaproddata.cerner_ods.dmc_prsnl_hist p ;
+FROM thcdnadevdata.cerner_ods.dmc_prsnl_hist p ;
 
-drop table IF EXISTS thcdnaproddata.aci.cerner_dmc_prsnl_alias_all;
+drop table IF EXISTS thcdnadevdata.aci.cerner_dmc_prsnl_alias_all;
 
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.cerner_dmc_prsnl_alias_all AS 
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.cerner_dmc_prsnl_alias_all AS 
 SELECT HEALTH_SYSTEM_SOURCE_ID,
  PERSON_ID,
  Prsnl_ALIAS_TYPE_CD
- FROM thcdnaproddata.cerner_ods.cerner_prsnl_alias_hist  UNION DISTINCT
+ FROM thcdnadevdata.cerner_ods.cerner_prsnl_alias_hist  UNION DISTINCT
  SELECT HEALTH_SYSTEM_SOURCE_ID,
  PERSON_ID,
  Prsnl_ALIAS_TYPE_CD
- FROM thcdnaproddata.cerner_ods.dmc_prsnl_alias_hist;	 
+ FROM thcdnadevdata.cerner_ods.dmc_prsnl_alias_hist;	 
  
- drop table IF EXISTS thcdnaproddata.aci.ade_personnel;	  
+ drop table IF EXISTS thcdnadevdata.aci.ade_personnel;	  
 
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.ade_personnel AS
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.ade_personnel AS
 		SELECT p.HEALTH_SYSTEM_SOURCE_ID as PERSONNEL_HSS_ID,
     		   p.PERSON_ID as PERSONNEL_ID,
 			   p. PERSONNEL_FIRST_NAME,
@@ -574,19 +572,19 @@ CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.ade_personnel AS
 			   p.PERSONNEL_FULL_NAME,
 			   p.PHYSICIAN_IND as PHYSICIAN_IND,
 			   p.ACTIVE_IND as ACTIVE_IND			
-  		  FROM thcdnaproddata.aci.cerner_dmc_prsnl_all p
-		  LEFT JOIN thcdnaproddata.aci.dw_code_value cv
+  		  FROM thcdnadevdata.aci.cerner_dmc_prsnl_all p
+		  LEFT JOIN thcdnadevdata.aci.dw_code_value cv
 			ON p.HEALTH_SYSTEM_SOURCE_ID = cv.CODE_VALUE_HSS_ID and 
 			   p.POSITION_CD = cv.CODE_VALUE_SK 
-		  left JOIN thcdnaproddata.aci.cerner_dmc_prsnl_alias_all pa1
+		  left JOIN thcdnadevdata.aci.cerner_dmc_prsnl_alias_all pa1
    			on pa1.HEALTH_SYSTEM_SOURCE_ID = p.HEALTH_SYSTEM_SOURCE_ID and
     		   pa1.PERSON_ID = p.PERSON_ID and
     		   pa1.Prsnl_ALIAS_TYPE_CD = CASE WHEN p.HEALTH_SYSTEM_SOURCE_ID = 80041 THEN 5903754 WHEN p.HEALTH_SYSTEM_SOURCE_ID =  80047 THEN 4544624 WHEN p.HEALTH_SYSTEM_SOURCE_ID =  80048 THEN 131661687 ELSE 4007194 END ;
 
-drop table IF EXISTS thcdnaproddata.aci.ade_admin_nurse_unit_location;
+drop table IF EXISTS thcdnadevdata.aci.ade_admin_nurse_unit_location;
 
 
-	CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.ade_admin_nurse_unit_location CLUSTER BY hss_id AS 
+	CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.ade_admin_nurse_unit_location CLUSTER BY hss_id AS 
 	select 
 	    md.hss_id,
 	    md.order_id,
@@ -602,13 +600,13 @@ drop table IF EXISTS thcdnaproddata.aci.ade_admin_nurse_unit_location;
 	    md.performed_prsnl_id,
 	    md.nurse_unit_cd,
 	    md.nursing_unit_location
-	FROM thcdnaproddata.aci.ade_med_admin_nurse_unit_tmp md
+	FROM thcdnadevdata.aci.ade_med_admin_nurse_unit_tmp md
 	WHERE md.nursing_unit_location is not null;
 	
 	
-drop table IF EXISTS thcdnaproddata.aci.ade_admin_administering_rn ;
+drop table IF EXISTS thcdnadevdata.aci.ade_admin_administering_rn ;
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.ade_admin_administering_rn AS 
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.ade_admin_administering_rn AS 
 	SELECT 
 	    md.hss_id,
 	    md.order_id,
@@ -629,17 +627,17 @@ CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.ade_admin_administering_rn AS
 		p.PERSONNEL_FULL_NAME,
 		p.PHYSICIAN_IND,
 		p.ACTIVE_IND
-	FROM thcdnaproddata.aci.ade_med_admin_nurse_unit_tmp md
-	LEFT JOIN thcdnaproddata.aci.ade_personnel p
+	FROM thcdnadevdata.aci.ade_med_admin_nurse_unit_tmp md
+	LEFT JOIN thcdnadevdata.aci.ade_personnel p
 	ON md.hss_id = p.PERSONNEL_HSS_ID
 	and md.PERFORMED_PRSNL_ID = p.PERSONNEL_ID
 	WHERE p.PERSONNEL_FULL_NAME is not null
 	;
 	  
 
--- drop table IF EXISTS thcdnaproddata.aci.t_ade_report1;
+-- drop table IF EXISTS thcdnadevdata.aci.t_ade_report1;
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.t_ade_report1 as 
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.t_ade_report1 as 
 select  med1.ADE_TYPE_SK
        , med1.ADE_NAME as ADE_NAME
        , med1.DRUG_NAME as DRUG_NAME
@@ -689,7 +687,7 @@ select  med1.ADE_TYPE_SK
        , CAST(NULL AS STRING) as EVENT_TEST_RESULT--?
        , fl.RESULT_VALUE
        , fl.RESULT_VALUE_IND
-       ,thcdnaproddata.staging.convert_timezone(fl.PERFORMED_DT_TM_UTC, CAST( case IFNULL(f.DST_IND,'X') WHEN 'X' THEN NULL when 'Y' then 1 else 0 end AS BOOL), f.TM_ZONE_NM) as EVENT_PERFORMED_DT_TM
+       ,thcdnadevdata.staging.convert_timezone(fl.PERFORMED_DT_TM_UTC, CAST( case IFNULL(f.DST_IND,'X') WHEN 'X' THEN NULL when 'Y' then 1 else 0 end AS BOOL), f.TM_ZONE_NM) as EVENT_PERFORMED_DT_TM
        , o.DIM_ORDERING_PHYSICIAN_SK as EVENT_PHYSICIAN_DK
        --, pa1.FIRST_NM||' '||pa1.MIDDLE_NM||' '||pa1.LAST_NM  as EVENT_ORDERING_MD
 	   , stg.ordering_physician as EVENT_ORDERING_MD 
@@ -699,35 +697,35 @@ select  med1.ADE_TYPE_SK
 
 			,(case when timestamp_diff( cast(cast(current_datetime('America/Chicago') as string) as datetime),cast(cast(p.DATE_OF_BIRTH as string) as datetime) , second )/31536000 <18 then 1 else 0 end) as PEDIATRIC_PATIENT
       --  , (case when DATE_DIFF(CURRENT_DATETIME('America/Chicago'), p.DATE_OF_BIRTH, SECOND )/31536000 < 18 then 1 else 0 end) as PEDIATRIC_PATIENT
-       , CURRENT_DATETIME('America/Chicago') as DM_CREATE_DT_TM FROM thcdnaproddata.aci.t_ade_report_stging_final fl
+       , CURRENT_DATETIME('America/Chicago') as DM_CREATE_DT_TM FROM thcdnadevdata.aci.t_ade_report_stging_final fl
 inner join 	(select regexp_extract(unique_id,'[0-9]+',1,2) as order_id,
-regexp_extract(unique_id,'[0-9]+',1,1) as hss_id,* FROM thcdnaproddata.idm.fact_order) o
+regexp_extract(unique_id,'[0-9]+',1,1) as hss_id,* FROM thcdnadevdata.idm.fact_order) o
 on o.patient_account_nbr = fl.patient_account_nbr
 and o.facility_cd = fl.facility_cd 
 and o.order_id = CAST(fl.order_id AS STRING)
-inner JOIN thcdnaproddata.aci.t_ade_fact_med1 med1
+inner JOIN thcdnadevdata.aci.t_ade_fact_med1 med1
 on med1.DIM_ORDER_SK = o.dim_order_sk 
-inner JOIN thcdnaproddata.idm.dim_facility f
+inner JOIN thcdnadevdata.idm.dim_facility f
 on f.dim_facility_sk = o.dim_facility_Sk
-inner JOIN thcdnaproddata.idm.fact_encounter e
+inner JOIN thcdnadevdata.idm.fact_encounter e
 on e.patient_account_nbr = o.patient_account_nbr
 and e.facility_cd = o.facility_cd
-inner JOIN thcdnaproddata.idm.dim_patient p
+inner JOIN thcdnadevdata.idm.dim_patient p
 on p.dim_patient_sk = e.dim_patient_sk
-left JOIN thcdnaproddata.idm.dim_physician pa
+left JOIN thcdnadevdata.idm.dim_physician pa
 on pa.DIM_PHYSICIAN_SK = e.DIM_ATTENDING_PHYSICIAN_SK
-left JOIN thcdnaproddata.idm.dim_location d
+left JOIN thcdnadevdata.idm.dim_location d
 on d.DIM_LOCATION_SK = o.DIM_ORDER_LOCATION_SK
-left JOIN thcdnaproddata.aci.ordering_physician_stg stg
+left JOIN thcdnadevdata.aci.ordering_physician_stg stg
 on CAST(stg.hss_id AS STRING) = o.hss_id
 and CAST(stg.order_id AS STRING) = o.order_id  ;
 
 
-drop table IF EXISTS thcdnaproddata.aci.ade_med_admin_tmp;
+drop table IF EXISTS thcdnadevdata.aci.ade_med_admin_tmp;
 
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.ade_med_admin_tmp CLUSTER BY fact_order_sk as select ma.* FROM thcdnaproddata.aci.t_ade_fact_med3 fca	   
-inner JOIN thcdnaproddata.idm.fact_medications_administration ma
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.ade_med_admin_tmp CLUSTER BY fact_order_sk as select ma.* FROM thcdnadevdata.aci.t_ade_fact_med3 fca	   
+inner JOIN thcdnadevdata.idm.fact_medications_administration ma
 on fca.patient_account_nbr = ma.patient_account_nbr
 and fca.facility_cd = ma.facility_cd
 --WHERE ma.facility_cd='AHD'
@@ -735,7 +733,7 @@ and fca.facility_cd = ma.facility_cd
 
 
 
-CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.t_ade_report2 as
+CREATE TABLE IF NOT EXISTS thcdnadevdata.aci.t_ade_report2 as
 select 
 		 med2.ADE_TYPE_SK
        , med2.ADE_NAME as ADE_NAME
@@ -761,13 +759,13 @@ select
 -- 	           TRIM(substr(staging.age(datetime(md.ADMINISTER_TS), datetime(p.DATE_OF_BIRTH)),instr(staging.age(datetime(md.ADMINISTER_TS), datetime(p.DATE_OF_BIRTH)),'years',1)+6,2)) || ' Months'
 -- 		 else TRIM(substr(staging.age(datetime(md.ADMINISTER_TS), datetime(p.DATE_OF_BIRTH)),1,3)) || ' Years' end ) as EVENT_AGE 
 
--- 			,(case when thcdnaproddata.staging.age_calculation(date(md.ADMINISTER_TS),date(p.DATE_OF_BIRTH)) < 3 thEN																
+-- 			,(case when thcdnadevdata.staging.age_calculation(date(md.ADMINISTER_TS),date(p.DATE_OF_BIRTH)) < 3 thEN																
 -- 		MOD((case when DATE_DIFF(md.ADMINISTER_TS,p.DATE_OF_BIRTH,  MONTH) < 0 then 
 																																	   
 -- (DATE_DIFF(md.ADMINISTER_TS,p.DATE_OF_BIRTH, MONTH) + (IF(EXTRACT(day FROM p.DATE_OF_BIRTH) < EXTRACT(day FROM md.ADMINISTER_TS),1,0)))
 -- when DATE_DIFF(md.ADMINISTER_TS,p.DATE_OF_BIRTH, MONTH)=0 Then DATE_DIFF(md.ADMINISTER_TS,p.DATE_OF_BIRTH, MONTH)
 -- else (DATE_DIFF(md.ADMINISTER_TS,p.DATE_OF_BIRTH, MONTH) - (IF(EXTRACT(day FROM p.DATE_OF_BIRTH) > EXTRACT(day FROM md.ADMINISTER_TS),1,0))) end),12) || ' Months'
--- 		else thcdnaproddata.staging.age_calculation(date(md.ADMINISTER_TS),date(p.DATE_OF_BIRTH)) || ' Years' end ) as EVENT_AGE	 
+-- 		else thcdnadevdata.staging.age_calculation(date(md.ADMINISTER_TS),date(p.DATE_OF_BIRTH)) || ' Years' end ) as EVENT_AGE	 
 
   ,(case when staging.age_formatter(datetime(md.ADMINISTER_TS), datetime(p.DATE_OF_BIRTH),'Y') < 3 then 
 	             staging.age_formatter(datetime(md.ADMINISTER_TS), datetime(p.DATE_OF_BIRTH) ,'M') || ' Months'
@@ -820,44 +818,44 @@ select
        ,CURRENT_DATETIME('America/Chicago') as DM_CREATE_DT_TM FROM (SELECT regexp_extract(unique_id,'[0-9]+',1,1) as hss_id
 ,regexp_extract(unique_id,'[0-9]+',1,2) as EVENT_ID
 ,regexp_extract(unique_id,'[0-9]+',1,3) as CLINICAL_EVENT_ID
-,* FROM thcdnaproddata.aci.ade_med_admin_tmp) md
+,* FROM thcdnadevdata.aci.ade_med_admin_tmp) md
 inner join (select regexp_extract(unique_id,'[0-9]+',1,2) as order_id,
-regexp_extract(unique_id,'[0-9]+',1,1) as hss_id,* FROM thcdnaproddata.idm.fact_order) o
+regexp_extract(unique_id,'[0-9]+',1,1) as hss_id,* FROM thcdnadevdata.idm.fact_order) o
 on o.fact_order_sk = md.fact_order_sk
 --and o.patient_account_nbr = md.patient_account_nbr
 --and o.facility_cd = md.facility_cd --Commented out on 04172019
-inner JOIN thcdnaproddata.aci.t_ade_fact_med2 med2
+inner JOIN thcdnadevdata.aci.t_ade_fact_med2 med2
 on med2.DIM_ORDER_SK = o.dim_order_sk 
 --inner join idm..DIM_MEDICATIONS dm
 --on dm.DIM_MEDICATION_SK = md.DIM_ORDERED_MEDICATION_SK
-inner JOIN thcdnaproddata.idm.dim_patient p
+inner JOIN thcdnadevdata.idm.dim_patient p
 on p.dim_patient_sk =md.dim_patient_sk
-inner JOIN thcdnaproddata.idm.fact_encounter e
+inner JOIN thcdnadevdata.idm.fact_encounter e
 on e.patient_account_nbr = o.patient_account_nbr
 and e.facility_cd = o.facility_cd
-inner JOIN thcdnaproddata.idm.dim_facility f
+inner JOIN thcdnadevdata.idm.dim_facility f
 on f.dim_facility_sk = md.dim_facility_sk
-left JOIN thcdnaproddata.idm.dim_physician pa
+left JOIN thcdnadevdata.idm.dim_physician pa
 on pa.DIM_PHYSICIAN_SK = e.DIM_ATTENDING_PHYSICIAN_SK
-left JOIN thcdnaproddata.idm.dim_location d
+left JOIN thcdnadevdata.idm.dim_location d
 on d.DIM_LOCATION_SK = md.DIM_ADMINISTERING_LOCATION_SK
-left JOIN thcdnaproddata.idm.dim_location d1
+left JOIN thcdnadevdata.idm.dim_location d1
 on d1.DIM_LOCATION_SK = o.DIM_ORDER_LOCATION_SK
-left JOIN thcdnaproddata.aci.ordering_physician_stg stg
+left JOIN thcdnadevdata.aci.ordering_physician_stg stg
 on CAST(stg.hss_id AS STRING) = o.hss_id
 and CAST(stg.order_id AS STRING) = o.order_id  
-left JOIN thcdnaproddata.idm.dim_personnel pa2
+left JOIN thcdnadevdata.idm.dim_personnel pa2
 on pa2.DIM_PERSONNEL_SK = md.DIM_ADMINISTERING_PERSONNEL_SK
-left JOIN thcdnaproddata.idm.dim_measuring_units mu
+left JOIN thcdnadevdata.idm.dim_measuring_units mu
 on md.DIM_DOSAGE_MEASURING_UNITS_SK = mu.DIM_MEASURING_UNITS_SK
-left JOIN thcdnaproddata.aci.oredr_mnemonic_stg2 stg1
+left JOIN thcdnadevdata.aci.oredr_mnemonic_stg2 stg1
 on CAST(stg1.order_hss_id AS STRING) = o.hss_id
 and CAST(stg1.order_id AS STRING) = o.order_id 
-left JOIN thcdnaproddata.aci.ade_admin_nurse_unit_location stg2
+left JOIN thcdnadevdata.aci.ade_admin_nurse_unit_location stg2
 on CAST(stg2.hss_id AS STRING) = md.hss_id
 and CAST(stg2.event_id AS STRING) = md.EVENT_ID
 and CAST(stg2.clinical_event_id AS STRING)  = md.CLINICAL_EVENT_ID
-left JOIN thcdnaproddata.aci.ade_admin_administering_rn stg3
+left JOIN thcdnadevdata.aci.ade_admin_administering_rn stg3
 on CAST(stg3.hss_id AS STRING) = md.hss_id
 and CAST(stg3.event_id AS STRING) = md.EVENT_ID
 and CAST(stg3.clinical_event_id AS STRING)  = md.CLINICAL_EVENT_ID;

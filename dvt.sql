@@ -9,317 +9,133 @@
 -- =================================================================================================
 -- START STORED PROCEDURE CONTEXT
 -- Auto-generated from 2_sp_details.sql and 3_orig_sp.sql.
-
-create temp table all_hs_fn_temp1 CLUSTER BY HEALTH_SYSTEM_SOURCE_ID,encntr_id as
-SELECT * FROM (
-select ENC.*
-		,trim(substr(loc_nurse_unit_cd.DISPLAY, instr(loc_nurse_unit_cd.DISPLAY,'-')+1)) AS ADMIT_NURSING_STN
-		, row_number() over (partition by ENC.encntr_id,ENC.HEALTH_SYSTEM_SOURCE_ID,ENC.fac_cd  order by ENCNTR_LOC_HIST_ID asc, BEG_EFFECTIVE_DT_TM asc nulls last) enc_loc_hist_wagg
-FROM
-(select  distinct encntr_alias.alias mrn 
-        , encntr_alias2.alias pan
-        , encounter.encntr_id
-        , encounter.updt_dt_tm encounter_updt_dt_tm
-        , substr(code_value.display, 1, 3) fac_cd
-        , encounter.person_id
-        , encounter.HEALTH_SYSTEM_SOURCE_ID
-		, encounter.REASON_FOR_VISIT AS REASON_FOR_VISIT
-        , person.NAME_FULL_FORMATTED as patient_name
-        , person.BIRTH_DT_TM as patient_dob
-FROM thcdnaproddata.cerner_ods.cerner_encounter_hist encounter
-left outer JOIN thcdnaproddata.cerner_ods.cerner_encntr_alias_hist encntr_alias 
-	on encounter.HEALTH_SYSTEM_SOURCE_ID = encntr_alias.HEALTH_SYSTEM_SOURCE_ID 
-	and encounter.ENCNTR_ID = encntr_alias.ENCNTR_ID
-	and encounter.ACTIVE_IND = 1 
-	and encntr_alias.ENCNTR_ALIAS_TYPE_CD = 1079
-	and encntr_alias.ACTIVE_IND = 1 
-left outer JOIN thcdnaproddata.cerner_ods.cerner_encntr_alias_hist encntr_alias2 
-	on encounter.HEALTH_SYSTEM_SOURCE_ID = encntr_alias2.HEALTH_SYSTEM_SOURCE_ID 
-	and encounter.ENCNTR_ID = encntr_alias2.ENCNTR_ID
-	and encntr_alias2.ENCNTR_ALIAS_TYPE_CD = 1077 
-	and encntr_alias2.ACTIVE_IND = 1 
-inner JOIN thcdnaproddata.cerner_ods.cerner_encntr_loc_hist_hist encntr_loc_hist  
-	on encounter.HEALTH_SYSTEM_SOURCE_ID = encntr_loc_hist.HEALTH_SYSTEM_SOURCE_ID 
-	and encounter.ENCNTR_ID = encntr_loc_hist.ENCNTR_ID
-	and  encntr_loc_hist.encntr_type_cd = 309310
-inner JOIN thcdnaproddata.cerner_ods.cerner_code_value_hist code_value 
-	on encounter.HEALTH_SYSTEM_SOURCE_ID = code_value.HEALTH_SYSTEM_SOURCE_ID 
-	and encounter.LOC_FACILITY_CD = code_value.CODE_VALUE
-
-	and substr(code_value.display,1,3) in ('BMC','HNM','VBA','VBC','MOD','DES','IND','CYF','HHH','NFR','PMC','SRE','SYL','SRM','NMC','NM1','DHF',
-	'AHH','PVA','AHD','MHH','WVH','PBA','SFH','BAR','SCH','FRM','HAH','LOM','PLA','LAK','FVR','MAN','SVM','TWI','ECH','CCD','SIE','PRV','NBH',
-	'NCA','SLH','MTB','BMA','DHW','SPW','SES','NOS','SMH','CGH','DEL','WBO','PBG','FLO','HIA','GSM','PGH','HMD','EMC','FMM', 'RHB','SVH','FUH','WHF','TES')
-inner JOIN thcdnaproddata.cerner_ods.cerner_person_hist person
-        on encounter.health_system_source_id = person.HEALTH_SYSTEM_SOURCE_ID
-        and encounter.person_id = person.PERSON_ID
-        and person.ACTIVE_IND = 1
-where encounter.ACTIVE_IND = 1 
-
-) ENC 
-left JOIN thcdnaproddata.cerner_ods.cerner_encntr_loc_hist_hist encntr_loc_hist  
-	on ENC.HEALTH_SYSTEM_SOURCE_ID = encntr_loc_hist.HEALTH_SYSTEM_SOURCE_ID 
-	and ENC.ENCNTR_ID = encntr_loc_hist.ENCNTR_ID
-
-	and encntr_loc_hist.encntr_type_cd <> 309310  
-left JOIN thcdnaproddata.cerner_ods.cerner_code_value_hist loc_nurse_unit_cd
-       on	  loc_nurse_unit_cd.HEALTH_SYSTEM_SOURCE_ID = encntr_loc_hist.HEALTH_SYSTEM_SOURCE_ID and
-              loc_nurse_unit_cd.CODE_VALUE = encntr_loc_hist.LOC_NURSE_UNIT_CD and     
-              loc_nurse_unit_cd.CODE_SET = 220 
-   
-) ENC_LOC where ENC_LOC.enc_loc_hist_wagg = 1;
+-- No stored procedure context dependencies were detected.
 -- END STORED PROCEDURE CONTEXT
 
 -- =================================================================================================
 -- 2. Create the Original Temporary Table (V_TEMP_TABLE_ORIG)
 -- =================================================================================================
 CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_ORIG AS
-WITH code_value_with_groups AS (
-    SELECT
-        code_value.HEALTH_SYSTEM_SOURCE_ID,
-        code_value.CODE_VALUE,
-        code_value.display_key,
-        CASE
-            WHEN code_value.display_key LIKE 'DATETIMEPHYSICIANRETURNEDCALL' THEN 'PERFORMED_DT_TM' 
-                WHEN code_value.display_key in ('MODEOFARRIVALONUNIT','MODEOFARRIVAL') THEN 'ARR_METHOD_CE' 
-                WHEN ( code_value.display_key LIKE 'EDDISPOSITION' OR code_value.display_key LIKE '%DISPOSITIONDED' OR code_value.display_key LIKE '%DISPOSITIONTYPEED') THEN 'OUTCOME_CE' 
-                WHEN code_value.display_key IN 
-('EDBMCDISCHARGELOCATIONS','EDHNMDISCHARGELOCATIONS','EDVBADISCHARGELOCATIONS','EDVBCDISCHARGELOCATIONS','EDMODDISCHARGELOCATIONS','EDSYLDISCHARGELOCATIONS','EDCYFDISCHARGELOCATIONS','EDNFRDISCHARGELOCATIONS','EDPMCDISCHARGELOCATIONS','EDSRMDISCHARGELOCATIONS','EDAHHDISCHARGELOCATIONS','EDPVADISCHARGELOCATIONS','EDAHDDISCHARGELOCATIONS','EDMHHDISCHARGELOCATIONS','EDWVHDISCHARGELOCATIONS','EDPBADISCHARGELOCATIONS','EDBARDISCHARGELOCATIONS','EDSFHDISCHARGELOCATIONS','ESCHMDISCHARGELOCATIONS','EDFRMDISCHARGELOCATIONS','EDHAHDISCHARGELOCATIONS'
-,'EDDISCHARGED'
-,'EDADMITTOBMC','EDADMITTOHNM','EDADMITTOVBA','EDADMITTOVBC','EDADMITTOMOD','EDADMITTOSRE','EDADMITTOCYF','EDADMITTONFR','EDADMITTOPMC','EDADMITTOAHH','EDADMITTOPVA','EDADMITTOAHD','EDADMITTOMHH','EDADMITTOWVH','EDADMITTOPBA','EDADMITTOBAR','EDADMITTOSFH','EDADMITTOSCH','EDADMITTOFRM','EDADMITTOHAH'
-,'EDADMITTO'
-,'EDBMCEXTENDEDCARE','EDHNMEXTENDEDCARE','EDVBAEXTENDEDCARE','EDVBCEXTENDEDCARE','EDMODEXTENDEDCARE','EDSREEXTENDEDCARE','EDCYFEXTENDEDCARE','EDNFREXTENDEDCARE','EDPMCEXTENDEDCARE','EDSRMEXTENDEDCARE','EDAHHEXTENDEDCARE','EDPVAEXTENDEDCARE','EDAHDEXTENDEDCARE','EDMHHEXTENDEDCARE','EDWVHEXTENDEDCARE','EDPBAEXTENDEDCARE','EDBAREXTENDEDCARE','EDSFHEXTENDEDCARE','EDSCHEXTENDEDCARE','EDFRMEXTENDEDCARE','EDHAHEXTENDEDCARE'
-,'EDBMCNURSINGHOMES','EDHNMNURSINGHOMES','EDVBANURSINGHOMES','EDVBCNURSINGHOMES','EDMODNURSINGHOMES','EDSRENURSINGHOMES','EDCYFNURSINGHOMES','EDNFRNURSINGHOMES','EDPMCNURSINGHOMES','EDSRMNURSINGHOMES','EDAHHNURSINGHOMES','EDPVANURSINGHOMES','EDAHDNURSINGHOMES','EDMHHNURSINGHOMES','EDWVHNURSINGHOMES','EDPBANURSINGHOMES','EDBARNURSINGHOMES','EDSFHNURSINGHOMES','EDSCHNURSINGHOMES','EDFRMNURSINGHOMES','EDHAHNURSINGHOMES'
-,'EDBMCTRANSFER','EDHNMTRANSFER','EDVBATRANSFER','EDVBCTRANSFER','EDMODTRANSFER','EDSRETRANSFER','EDCYFTRANSFER','EDNFRTRANSFER','EDPMCTRANSFER','EDSRMTRANSFER','EDAHHTRANSFER','EDPVATRANSFER','EDAHDTRANSFER','EDMHHTRANSFER','EDWVHTRANSFER','EDPBATRANSFER','EDBARTRANSFER','EDSFHTRANSFER','EDSCHTRANSFER','EDFRMTRANSFER','EDHAHTRANSFER'
-,'EDBMCNURSINGHOME','EDHNMNURSINGHOME','EDVBANURSINGHOME','EDVBCNURSINGHOME','EDMODNURSINGHOME','EDSYLNURSINGHOME','EDCYFNURSINGHOME','EDNFRNURSINGHOME','EDPMCNURSINGHOME','EDSRMNURSINGHOME','EDAHHNURSINGHOME','EDPVANURSINGHOME','EDAHDNURSINGHOME','EDMHHNURSINGHOME','EDWVHNURSINGHOME','EDPBANURSINGHOME','EDBARNURSINGHOME','EDSFHNURSINGHOME','EDSCHNURSINGHOME','EDFRMNURSINGHOME','EDHAHNURSINGHOME'
-,'EDBMCTRANSFERLOCATIONS','EDHNMTRANSFERLOCATIONS','EDVBATRANSFERLOCATIONS','EDVBCTRANSFERLOCATIONS','EDMODTRANSFERLOCATIONS','EDSYLTRANSFERLOCATIONS','EDCYFTRANSFERLOCATIONS','EDNFRTRANSFERLOCATIONS','EDPMCTRANSFERLOCATIONS','EDSRMTRANSFERLOCATIONS','EDAHHTRANSFERLOCATIONS','EDPVATRANSFERLOCATIONS','EDAHDTRANSFERLOCATIONS','EDMHHTRANSFERLOCATIONS','EDWVHTRANSFERLOCATIONS','EDPBATRANSFERLOCATIONS','EDBARTRANSFERLOCATIONS','EDSFHTRANSFERLOCATIONS','EDSCHTRANSFERLOCATIONS','EDFRMTRANSFERLOCATIONS','EDHAHTRANSFERLOCATIONS'
-,'EDCYFADMITTO','EDCYFTRANSFERTO','EDSRMADMITTO','EDSRMTRANSFERTO','EDMODADMITTO','EDMODTRANSFERTO'
-)
-                        OR code_value.display_key LIKE '%ADMITTODED' 
-                        OR code_value.display_key LIKE '%EXTENDEDCAREDED' 
-                        OR code_value.display_key LIKE '%NURSINGHOMEDED' 
-                        OR code_value.display_key LIKE '%TRANSFERLOCATIONSDED' 
-                    THEN 'OUTCOME_LOC_CE' 
-                    ELSE 'OTHER' 
-                END display_group
-    FROM
-        thcdnaproddata.cerner_ods.cerner_code_value_hist AS code_value
-    WHERE
-        code_value.CODE_SET = 72
-        AND code_value.ACTIVE_IND = 1
-        AND ( code_value.display_key in ('DATETIMEPHYSICIANRETURNEDCALL','MODEOFARRIVALONUNIT','MODEOFARRIVAL','EDDISPOSITION','EDBMCDISCHARGELOCATIONS','EDHNMDISCHARGELOCATIONS','EDVBADISCHARGELOCATIONS','EDVBCDISCHARGELOCATIONS','EDMODDISCHARGELOCATIONS','EDSYLDISCHARGELOCATIONS','EDCYFDISCHARGELOCATIONS','EDNFRDISCHARGELOCATIONS','EDPMCDISCHARGELOCATIONS','EDSRMDISCHARGELOCATIONS','EDAHHDISCHARGELOCATIONS','EDPVADISCHARGELOCATIONS','EDAHDDISCHARGELOCATIONS','EDMHHDISCHARGELOCATIONS','EDWVHDISCHARGELOCATIONS','EDPBADISCHARGELOCATIONS','EDBARDISCHARGELOCATIONS','EDSFHDISCHARGELOCATIONS','ESCHMDISCHARGELOCATIONS','EDFRMDISCHARGELOCATIONS','EDHAHDISCHARGELOCATIONS'
-                    ,'EDDISCHARGED'
-                    ,'EDADMITTOBMC','EDADMITTOHNM','EDADMITTOVBA','EDADMITTOVBC','EDADMITTOMOD','EDADMITTOSRE','EDADMITTOCYF','EDADMITTONFR','EDADMITTOPMC','EDADMITTOAHH','EDADMITTOPVA','EDADMITTOAHD','EDADMITTOMHH','EDADMITTOWVH','EDADMITTOPBA','EDADMITTOBAR','EDADMITTOSFH','EDADMITTOSCH','EDADMITTOFRM','EDADMITTOHAH'
-                    ,'EDADMITTO'
-                    ,'EDBMCEXTENDEDCARE','EDHNMEXTENDEDCARE','EDVBAEXTENDEDCARE','EDVBCEXTENDEDCARE','EDMODEXTENDEDCARE','EDSREEXTENDEDCARE','EDCYFEXTENDEDCARE','EDNFREXTENDEDCARE','EDPMCEXTENDEDCARE','EDSRMEXTENDEDCARE','EDAHHEXTENDEDCARE','EDPVAEXTENDEDCARE','EDAHDEXTENDEDCARE','EDMHHEXTENDEDCARE','EDWVHEXTENDEDCARE','EDPBAEXTENDEDCARE','EDBAREXTENDEDCARE','EDSFHEXTENDEDCARE','EDSCHEXTENDEDCARE','EDFRMEXTENDEDCARE','EDHAHEXTENDEDCARE'
-                    ,'EDBMCNURSINGHOMES','EDHNMNURSINGHOMES','EDVBANURSINGHOMES','EDVBCNURSINGHOMES','EDMODNURSINGHOMES','EDSRENURSINGHOMES','EDCYFNURSINGHOMES','EDNFRNURSINGHOMES','EDPMCNURSINGHOMES','EDSRMNURSINGHOMES','EDAHHNURSINGHOMES','EDPVANURSINGHOMES','EDAHDNURSINGHOMES','EDMHHNURSINGHOMES','EDWVHNURSINGHOMES','EDPBANURSINGHOMES','EDBARNURSINGHOMES','EDSFHNURSINGHOMES','EDSCHNURSINGHOMES','EDFRMNURSINGHOMES','EDHAHNURSINGHOMES'
-                    ,'EDBMCTRANSFER','EDHNMTRANSFER','EDVBATRANSFER','EDVBCTRANSFER','EDMODTRANSFER','EDSRETRANSFER','EDCYFTRANSFER','EDNFRTRANSFER','EDPMCTRANSFER','EDSRMTRANSFER','EDAHHTRANSFER','EDPVATRANSFER','EDAHDTRANSFER','EDMHHTRANSFER','EDWVHTRANSFER','EDPBATRANSFER','EDBARTRANSFER','EDSFHTRANSFER','EDSCHTRANSFER','EDFRMTRANSFER','EDHAHTRANSFER'
-                    ,'EDBMCNURSINGHOME','EDHNMNURSINGHOME','EDVBANURSINGHOME','EDVBCNURSINGHOME','EDMODNURSINGHOME','EDSYLNURSINGHOME','EDCYFNURSINGHOME','EDNFRNURSINGHOME','EDPMCNURSINGHOME','EDSRMNURSINGHOME','EDAHHNURSINGHOME','EDPVANURSINGHOME','EDAHDNURSINGHOME','EDMHHNURSINGHOME','EDWVHNURSINGHOME','EDPBANURSINGHOME','EDBARNURSINGHOME','EDSFHNURSINGHOME','EDSCHNURSINGHOME','EDFRMNURSINGHOME','EDHAHNURSINGHOME'
-                    ,'EDBMCTRANSFERLOCATIONS','EDHNMTRANSFERLOCATIONS','EDVBATRANSFERLOCATIONS','EDVBCTRANSFERLOCATIONS','EDMODTRANSFERLOCATIONS','EDSYLTRANSFERLOCATIONS','EDCYFTRANSFERLOCATIONS','EDNFRTRANSFERLOCATIONS','EDPMCTRANSFERLOCATIONS','EDSRMTRANSFERLOCATIONS','EDAHHTRANSFERLOCATIONS','EDPVATRANSFERLOCATIONS','EDAHDTRANSFERLOCATIONS','EDMHHTRANSFERLOCATIONS','EDWVHTRANSFERLOCATIONS','EDPBATRANSFERLOCATIONS','EDBARTRANSFERLOCATIONS','EDSFHTRANSFERLOCATIONS','EDSCHTRANSFERLOCATIONS','EDFRMTRANSFERLOCATIONS','EDHAHTRANSFERLOCATIONS'
-                    ,'EDCYFADMITTO','EDCYFTRANSFERTO','EDSRMADMITTO','EDSRMTRANSFERTO','EDMODADMITTO','EDMODTRANSFERTO'
-                    )
-        OR code_value.display_key LIKE '%ADMITTODED' 
-        OR code_value.display_key LIKE '%EXTENDEDCAREDED' 
-        OR code_value.display_key LIKE '%NURSINGHOMEDED' 
-        OR code_value.display_key LIKE '%TRANSFERLOCATIONSDED' 
-        OR code_value.display_key LIKE '%DISPOSITIONDED' 
-        OR code_value.display_key LIKE '%DISPOSITIONTYPEED'
-        )
-),
-filtered_events AS (
-    SELECT
-        ce.HEALTH_SYSTEM_SOURCE_ID,
-        ce.ENCNTR_ID,
-        ce.PERFORMED_DT_TM,
-        ce.PERFORMED_PRSNL_ID,
-        ce.RESULT_VAL,
-        cvg.display_group,
-        ROW_NUMBER() OVER (
-            PARTITION BY ce.ENCNTR_ID, ce.HEALTH_SYSTEM_SOURCE_ID, cvg.display_group
-            ORDER BY ce.event_id ASC NULLS LAST, ce.clinical_event_id DESC NULLS LAST
-        ) AS rn
-    FROM
-        thcdnaproddata.cerner_ods.cerner_clinical_event_hist AS ce
-    left  JOIN
-        code_value_with_groups AS cvg
-        ON ce.EVENT_CD = cvg.CODE_VALUE AND ce.HEALTH_SYSTEM_SOURCE_ID = cvg.HEALTH_SYSTEM_SOURCE_ID
-),
-final_events AS (
-    SELECT *
-    FROM filtered_events
-    WHERE rn = 1
-)
-SELECT
-    foo.health_system_source_id,
-    foo.mrn,
-    foo.pan,
-    foo.encntr_id,
-    foo.fac_cd,
-    foo.person_id,
-    foo.patient_name,
-    foo.patient_dob,
-    foo.encounter_updt_dt_tm,
-    foo.ADMIT_NURSING_STN,
-    foo.REASON_FOR_VISIT,
-    MAX(CASE WHEN fe.display_group = 'PERFORMED_DT_TM' THEN fe.PERFORMED_DT_TM ELSE NULL END) AS PERFORMED_DT_TM,
-    MAX(CASE WHEN fe.display_group = 'PERFORMED_DT_TM' THEN p1.NAME_FULL_FORMATTED ELSE NULL END) AS CHARTED_PHYS_ON_CALL_NM,
-    MAX(CASE WHEN fe.display_group = 'ARR_METHOD_CE' THEN fe.result_val ELSE NULL END) AS ARR_METHOD,
-    MAX(CASE WHEN fe.display_group = 'OUTCOME_CE' THEN fe.result_val ELSE NULL END) AS OUTCOME,
-    MAX(CASE WHEN fe.display_group = 'OUTCOME_LOC_CE' THEN fe.result_val ELSE NULL END) AS OUTCOME_LOCATION
-FROM
-    all_hs_fn_temp1 AS foo
-INNER JOIN
-    final_events AS fe ON foo.encntr_id = fe.ENCNTR_ID AND foo.HEALTH_SYSTEM_SOURCE_ID = fe.HEALTH_SYSTEM_SOURCE_ID
-LEFT OUTER JOIN
-    thcdnaproddata.cerner_ods.cerner_prsnl_hist AS p1
-    ON fe.PERFORMED_PRSNL_ID = p1.PERSON_ID AND fe.HEALTH_SYSTEM_SOURCE_ID = p1.HEALTH_SYSTEM_SOURCE_ID
-GROUP BY
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11;
+
+select * FROM (
+--CERNER
+select distinct o.order_id
+,o.health_system_source_id as hss_id
+, p.name_full_formatted as ordering_physician
+FROM thcdnaproddata.cerner_ods.cerner_orders_hist o
+inner JOIN thcdnaproddata.cerner_ods.cerner_order_action_hist oa
+on oa.order_id = o.order_id
+and oa.health_system_source_id = o.health_system_source_id
+and oa.order_provider_id > 0
+and oa.action_sequence = 1    
+inner JOIN thcdnaproddata.cerner_ods.cerner_code_value_hist cv
+on oa.action_type_cd = cv.code_value
+and cv.display = 'Order'
+and oa.health_system_source_id = cv.health_system_source_id
+inner JOIN thcdnaproddata.cerner_ods.cerner_prsnl_hist p
+on p.person_id = oa.order_provider_id
+inner JOIN thcdnaproddata.cerner_ods.cerner_code_value_hist f 
+on p.health_system_source_id = f.health_system_source_id 
+and f.code_value = p.position_cd
+
+UNION ALL
+---DMC
+select distinct o.order_id
+,o.health_system_source_id as hss_id
+, p.name_full_formatted as ordering_physician
+FROM thcdnaproddata.cerner_ods.dmc_orders_hist o
+inner JOIN thcdnaproddata.cerner_ods.dmc_order_action_hist oa
+on oa.order_id = o.order_id
+and oa.health_system_source_id = o.health_system_source_id
+and oa.order_provider_id > 0
+and oa.action_sequence = 1    
+inner JOIN thcdnaproddata.cerner_ods.dmc_code_value_hist cv
+on oa.action_type_cd = cv.code_value
+and cv.display = 'Order'
+and oa.health_system_source_id = cv.health_system_source_id
+inner JOIN thcdnaproddata.cerner_ods.dmc_prsnl_hist p
+on p.person_id = oa.order_provider_id
+inner JOIN thcdnaproddata.cerner_ods.dmc_code_value_hist f 
+on p.health_system_source_id = f.health_system_source_id 
+and f.code_value = p.position_cd
+) as foo;
 
 -- =================================================================================================
 -- 3. Create the Optimized Temporary Table (V_TEMP_TABLE_OPT)
 -- =================================================================================================
 CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_OPT AS
-WITH code_value_with_groups AS (
-    -- This CTE is efficient, but the ELSE 'OTHER' is unreachable due to the WHERE clause.
-    -- Removing it for clarity; any row passing the WHERE clause must match a WHEN condition.
-    SELECT
-        code_value.HEALTH_SYSTEM_SOURCE_ID,
-        code_value.CODE_VALUE,
-        code_value.display_key,
-        CASE
-            WHEN code_value.display_key LIKE 'DATETIMEPHYSICIANRETURNEDCALL' THEN 'PERFORMED_DT_TM' 
-            WHEN code_value.display_key in ('MODEOFARRIVALONUNIT','MODEOFARRIVAL') THEN 'ARR_METHOD_CE' 
-            WHEN ( code_value.display_key LIKE 'EDDISPOSITION' OR code_value.display_key LIKE '%DISPOSITIONDED' OR code_value.display_key LIKE '%DISPOSITIONTYPEED') THEN 'OUTCOME_CE' 
-            WHEN code_value.display_key IN 
-('EDBMCDISCHARGELOCATIONS','EDHNMDISCHARGELOCATIONS','EDVBADISCHARGELOCATIONS','EDVBCDISCHARGELOCATIONS','EDMODDISCHARGELOCATIONS','EDSYLDISCHARGELOCATIONS','EDCYFDISCHARGELOCATIONS','EDNFRDISCHARGELOCATIONS','EDPMCDISCHARGELOCATIONS','EDSRMDISCHARGELOCATIONS','EDAHHDISCHARGELOCATIONS','EDPVADISCHARGELOCATIONS','EDAHDDISCHARGELOCATIONS','EDMHHDISCHARGELOCATIONS','EDWVHDISCHARGELOCATIONS','EDPBADISCHARGELOCATIONS','EDBARDISCHARGELOCATIONS','EDSFHDISCHARGELOCATIONS','ESCHMDISCHARGELOCATIONS','EDFRMDISCHARGELOCATIONS','EDHAHDISCHARGELOCATIONS'
-,'EDDISCHARGED'
-,'EDADMITTOBMC','EDADMITTOHNM','EDADMITTOVBA','EDADMITTOVBC','EDADMITTOMOD','EDADMITTOSRE','EDADMITTOCYF','EDADMITTONFR','EDADMITTOPMC','EDADMITTOAHH','EDADMITTOPVA','EDADMITTOAHD','EDADMITTOMHH','EDADMITTOWVH','EDADMITTOPBA','EDADMITTOBAR','EDADMITTOSFH','EDADMITTOSCH','EDADMITTOFRM','EDADMITTOHAH'
-,'EDADMITTO'
-,'EDBMCEXTENDEDCARE','EDHNMEXTENDEDCARE','EDVBAEXTENDEDCARE','EDVBCEXTENDEDCARE','EDMODEXTENDEDCARE','EDSREEXTENDEDCARE','EDCYFEXTENDEDCARE','EDNFREEXTENDEDCARE','EDPMCEXTENDEDCARE','EDSRMEXTENDEDCARE','EDAHHEXTENDEDCARE','EDPVAEXTENDEDCARE','EDAHDEXTENDEDCARE','EDMHHEXTENDEDCARE','EDWVHEXTENDEDCARE','EDPBAEXTENDEDCARE','EDBAREXTENDEDCARE','EDSFHEXTENDEDCARE','EDSCHEXTENDEDCARE','EDFRMEXTENDEDCARE','EDHAHEXTENDEDCARE'
-,'EDBMCNURSINGHOMES','EDHNMNURSINGHOMES','EDVBANURSINGHOMES','EDVBCNURSINGHOMES','EDMODNURSINGHOMES','EDSRENURSINGHOMES','EDCYFNURSINGHOMES','EDNFRNURSINGHOMES','EDPMCNURSINGHOMES','EDSRMNURSINGHOMES','EDAHHNURSINGHOMES','EDPVANURSINGHOMES','EDAHDNURSINGHOMES','EDMHHNURSINGHOMES','EDWVHNURSINGHOMES','EDPBANURSINGHOMES','EDBARNURSINGHOMES','EDSFHNURSINGHOMES','EDSCHNURSINGHOMES','EDFRMNURSINGHOMES','EDHAHNURSINGHOMES'
-,'EDBMCTRANSFER','EDHNMTRANSFER','EDVBATRANSFER','EDVBCTRANSFER','EDMODTRANSFER','EDSRETRANSFER','EDCYFTRANSFER','EDNFRTRANSFER','EDPMCTRANSFER','EDSRMTRANSFER','EDAHHTRANSFER','EDPVATRANSFER','EDAHDTRANSFER','EDMHHTRANSFER','EDWVHTRANSFER','EDPBATRANSFER','EDBARTRANSFER','EDSFHTRANSFER','EDSCHTRANSFER','EDFRMTRANSFER','EDHAHTRANSFER'
-,'EDBMCNURSINGHOME','EDHNMNURSINGHOME','EDVBANURSINGHOME','EDVBCNURSINGHOME','EDMODNURSINGHOME','EDSYLNURSINGHOME','EDCYFNURSINGHOME','EDNFRNURSINGHOME','EDPMCNURSINGHOME','EDSRMNURSINGHOME','EDAHHNURSINGHOME','EDPVANURSINGHOME','EDAHDNURSINGHOME','EDMHHNURSINGHOME','EDWVHNURSINGHOME','EDPBANURSINGHOME','EDBARNURSINGHOME','EDSFHNURSINGHOME','EDSCHNURSINGHOME','EDFRMNURSINGHOME','EDHAHNURSINGHOME'
-,'EDBMCTRANSFERLOCATIONS','EDHNMTRANSFERLOCATIONS','EDVBATRANSFERLOCATIONS','EDVBCTRANSFERLOCATIONS','EDMODTRANSFERLOCATIONS','EDSYLTRANSFERLOCATIONS','EDCYFTRANSFERLOCATIONS','EDNFRTRANSFERLOCATIONS','EDPMCTRANSFERLOCATIONS','EDSRMTRANSFERLOCATIONS','EDAHHTRANSFERLOCATIONS','EDPVATRANSFERLOCATIONS','EDAHDTRANSFERLOCATIONS','EDMHHTRANSFERLOCATIONS','EDWVHTRANSFERLOCATIONS','EDPBATRANSFERLOCATIONS','EDBARTRANSFERLOCATIONS','EDSFHTRANSFERLOCATIONS','EDSCHTRANSFERLOCATIONS','EDFRMTRANSFERLOCATIONS','EDHAHTRANSFERLOCATIONS'
-,'EDCYFADMITTO','EDCYFTRANSFERTO','EDSRMADMITTO','EDSRMTRANSFERTO','EDMODADMITTO','EDMODTRANSFERTO'
+
+WITH cerner_data AS (
+  SELECT DISTINCT
+    o.order_id,
+    o.health_system_source_id AS hss_id,
+    p.name_full_formatted AS ordering_physician
+  FROM
+    `thcdnaproddata.cerner_ods.cerner_orders_hist` AS o
+  INNER JOIN
+    `thcdnaproddata.cerner_ods.cerner_order_action_hist` AS oa
+    ON o.order_id = oa.order_id AND o.health_system_source_id = oa.health_system_source_id
+  INNER JOIN
+    `thcdnaproddata.cerner_ods.cerner_prsnl_hist` AS p
+    ON oa.order_provider_id = p.person_id
+  WHERE
+    oa.action_sequence = 1
+    AND oa.order_provider_id > 0
+    -- Replaced INNER JOIN to 'cv' with a more efficient EXISTS subquery to act as a filter
+    AND EXISTS (
+      SELECT 1
+      FROM `thcdnaproddata.cerner_ods.cerner_code_value_hist` AS cv
+      WHERE
+        cv.code_value = oa.action_type_cd
+        AND cv.health_system_source_id = oa.health_system_source_id
+        AND cv.display = 'Order'
+    )
+    -- Replaced filtering INNER JOIN to 'f' with a more efficient EXISTS subquery
+    AND EXISTS (
+      SELECT 1
+      FROM `thcdnaproddata.cerner_ods.cerner_code_value_hist` AS f
+      WHERE
+        f.code_value = p.position_cd
+        AND f.health_system_source_id = p.health_system_source_id
+    )
+),
+dmc_data AS (
+  SELECT DISTINCT
+    o.order_id,
+    o.health_system_source_id AS hss_id,
+    p.name_full_formatted AS ordering_physician
+  FROM
+    `thcdnaproddata.cerner_ods.dmc_orders_hist` AS o
+  INNER JOIN
+    `thcdnaproddata.cerner_ods.dmc_order_action_hist` AS oa
+    ON o.order_id = oa.order_id AND o.health_system_source_id = oa.health_system_source_id
+  INNER JOIN
+    `thcdnaproddata.cerner_ods.dmc_prsnl_hist` AS p
+    ON oa.order_provider_id = p.person_id
+  WHERE
+    oa.action_sequence = 1
+    AND oa.order_provider_id > 0
+    -- Replaced INNER JOIN to 'cv' with a more efficient EXISTS subquery to act as a filter
+    AND EXISTS (
+      SELECT 1
+      FROM `thcdnaproddata.cerner_ods.dmc_code_value_hist` AS cv
+      WHERE
+        cv.code_value = oa.action_type_cd
+        AND cv.health_system_source_id = oa.health_system_source_id
+        AND cv.display = 'Order'
+    )
+    -- Replaced filtering INNER JOIN to 'f' with a more efficient EXISTS subquery
+    AND EXISTS (
+      SELECT 1
+      FROM `thcdnaproddata.cerner_ods.dmc_code_value_hist` AS f
+      WHERE
+        f.code_value = p.position_cd
+        AND f.health_system_source_id = p.health_system_source_id
+    )
 )
-                        OR code_value.display_key LIKE '%ADMITTODED' 
-                        OR code_value.display_key LIKE '%EXTENDEDCAREDED' 
-                        OR code_value.display_key LIKE '%NURSINGHOMEDED' 
-                        OR code_value.display_key LIKE '%TRANSFERLOCATIONSDED' 
-                    THEN 'OUTCOME_LOC_CE' 
-        END AS display_group
-    FROM
-        thcdnaproddata.cerner_ods.cerner_code_value_hist AS code_value
-    WHERE
-        code_value.CODE_SET = 72
-        AND code_value.ACTIVE_IND = 1
-        AND ( code_value.display_key in ('DATETIMEPHYSICIANRETURNEDCALL','MODEOFARRIVALONUNIT','MODEOFARRIVAL','EDDISPOSITION','EDBMCDISCHARGELOCATIONS','EDHNMDISCHARGELOCATIONS','EDVBADISCHARGELOCATIONS','EDVBCDISCHARGELOCATIONS','EDMODDISCHARGELOCATIONS','EDSYLDISCHARGELOCATIONS','EDCYFDISCHARGELOCATIONS','EDNFRDISCHARGELOCATIONS','EDPMCDISCHARGELOCATIONS','EDSRMDISCHARGELOCATIONS','EDAHHDISCHARGELOCATIONS','EDPVADISCHARGELOCATIONS','EDAHDDISCHARGELOCATIONS','EDMHHDISCHARGELOCATIONS','EDWVHDISCHARGELOCATIONS','EDPBADISCHARGELOCATIONS','EDBARDISCHARGELOCATIONS','EDSFHDISCHARGELOCATIONS','ESCHMDISCHARGELOCATIONS','EDFRMDISCHARGELOCATIONS','EDHAHDISCHARGELOCATIONS'
-                    ,'EDDISCHARGED'
-                    ,'EDADMITTOBMC','EDADMITTOHNM','EDADMITTOVBA','EDADMITTOVBC','EDADMITTOMOD','EDADMITTOSRE','EDADMITTOCYF','EDADMITTONFR','EDADMITTOPMC','EDADMITTOAHH','EDADMITTOPVA','EDADMITTOAHD','EDADMITTOMHH','EDADMITTOWVH','EDADMITTOPBA','EDADMITTOBAR','EDADMITTOSFH','EDADMITTOSCH','EDADMITTOFRM','EDADMITTOHAH'
-                    ,'EDADmitto'
-                    ,'EDBMCEXTENDEDCARE','EDHNMEXTENDEDCARE','EDVBAEXTENDEDCARE','EDVBCEXTENDEDCARE','EDMODEXTENDEDCARE','EDSREEXTENDEDCARE','EDCYFEXTENDEDCARE','EDNFREEXTENDEDCARE','EDPMCEXTENDEDCARE','EDSRMEXTENDEDCARE','EDAHHEXTENDEDCARE','EDPVAEXTENDEDCARE','EDAHDEXTENDEDCARE','EDMHHEXTENDEDCARE','EDWVHEXTENDEDCARE','EDPBAEXTENDEDCARE','EDBAREXTENDEDCARE','EDSFHEXTENDEDCARE','EDSCHEXTENDEDCARE','EDFRMEXTENDEDCARE','EDHAHEXTENDEDCARE'
-                    ,'EDBMCNURSINGHOMES','EDHNMNURSINGHOMES','EDVBANURSINGHOMES','EDVBCNURSINGHOMES','EDMODNURSINGHOMES','EDSRENURSINGHOMES','EDCYFNURSINGHOMES','EDNFRNURSINGHOMES','EDPMCNURSINGHOMES','EDSRMNURSINGHOMES','EDAHHNURSINGHOMES','EDPVANURSINGHOMES','EDAHDNURSINGHOMES','EDMHHNURSINGHOMES','EDWVHNURSINGHOMES','EDPBANURSINGHOMES','EDBARNURSINGHOMES','EDSFHNURSINGHOMES','EDSCHNURSINGHOMES','EDFRMNURSINGHOMES','EDHAHNURSINGHOMES'
-                    ,'EDBMCTRANSFER','EDHNMTRANSFER','EDVBATRANSFER','EDVBCTRANSFER','EDMODTRANSFER','EDSRETRANSFER','EDCYFTRANSFER','EDNFRTRANSFER','EDPMCTRANSFER','EDSRMTRANSFER','EDAHHTRANSFER','EDPVATRANSFER','EDAHDTRANSFER','EDMHHTRANSFER','EDWVHTRANSFER','EDPBATRANSFER','EDBARTRANSFER','EDSFHTRANSFER','EDSCHTRANSFER','EDFRMTRANSFER','EDHAHTRANSFER'
-                    ,'EDBMCNURSINGHOME','EDHNMNURSINGHOME','EDVBANURSINGHOME','EDVBCNURSINGHOME','EDMODNURSINGHOME','EDSYLNURSINGHOME','EDCYFNURSINGHOME','EDNFRNURSINGHOME','EDPMCNURSINGHOME','EDSRMNURSINGHOME','EDAHHNURSINGHOME','EDPVANURSINGHOME','EDAHDNURSINGHOME','EDMHHNURSINGHOME','EDWVHNURSINGHOME','EDPBANURSINGHOME','EDBARNURSINGHOME','EDSFHNURSINGHOME','EDSCHNURSINGHOME','EDFRMNURSINGHOME','EDHAHNURSINGHOME'
-                    ,'EDBMCTRANSFERLOCATIONS','EDHNMTRANSFERLOCATIONS','EDVBATRANSFERLOCATIONS','EDVBCTRANSFERLOCATIONS','EDMODTRANSFERLOCATIONS','EDSYLTRANSFERLOCATIONS','EDCYFTRANSFERLOCATIONS','EDNFRTRANSFERLOCATIONS','EDPMCTRANSFERLOCATIONS','EDSRMTRANSFERLOCATIONS','EDAHHTRANSFERLOCATIONS','EDPVATRANSFERLOCATIONS','EDAHDTRANSFERLOCATIONS','EDMHHTRANSFERLOCATIONS','EDWVHTRANSFERLOCATIONS','EDPBATRANSFERLOCATIONS','EDBARTRANSFERLOCATIONS','EDSFHTRANSFERLOCATIONS','EDSCHTRANSFERLOCATIONS','EDFRMTRANSFERLOCATIONS','EDHAHTRANSFERLOCATIONS'
-                    ,'EDCYFADMITTO','EDCYFTRANSFERTO','EDSRMADMITTO','EDSRMTRANSFERTO','EDMODADMITTO','EDMODTRANSFERTO'
-                    )
-        OR code_value.display_key LIKE '%ADMITTODED' 
-        OR code_value.display_key LIKE '%EXTENDEDCAREDED' 
-        OR code_value.display_key LIKE '%NURSINGHOMEDED' 
-        OR code_value.display_key LIKE '%TRANSFERLOCATIONSDED' 
-        OR code_value.display_key LIKE '%DISPOSITIONDED' 
-        OR code_value.display_key LIKE '%DISPOSITIONTYPEED'
-        )
-),
--- OPTIMIZATION: Pre-filter clinical events to only those encounters present in the driving table `all_hs_fn_temp1`.
--- This drastically reduces the number of rows processed by the expensive ROW_NUMBER() function.
-relevant_events AS (
-    SELECT
-        ce.HEALTH_SYSTEM_SOURCE_ID,
-        ce.ENCNTR_ID,
-        ce.EVENT_CD,
-        ce.PERFORMED_DT_TM,
-        ce.PERFORMED_PRSNL_ID,
-        ce.RESULT_VAL,
-        ce.event_id,
-        ce.clinical_event_id
-    FROM
-        thcdnaproddata.cerner_ods.cerner_clinical_event_hist AS ce
-    INNER JOIN
-        all_hs_fn_temp1 AS foo
-        ON ce.ENCNTR_ID = foo.encntr_id
-        AND ce.HEALTH_SYSTEM_SOURCE_ID = foo.HEALTH_SYSTEM_SOURCE_ID
-),
-filtered_events AS (
-    SELECT
-        re.HEALTH_SYSTEM_SOURCE_ID,
-        re.ENCNTR_ID,
-        re.PERFORMED_DT_TM,
-        re.PERFORMED_PRSNL_ID,
-        re.RESULT_VAL,
-        cvg.display_group,
-        -- The ROW_NUMBER() logic is preserved exactly to guarantee correctness.
-        ROW_NUMBER() OVER (
-            PARTITION BY re.ENCNTR_ID, re.HEALTH_SYSTEM_SOURCE_ID, cvg.display_group
-            ORDER BY re.event_id ASC NULLS LAST, re.clinical_event_id DESC NULLS LAST
-        ) AS rn
-    FROM
-        -- Now joining from the pre-filtered set of events, not the entire history table.
-        relevant_events AS re 
-    LEFT JOIN
-        code_value_with_groups AS cvg
-        ON re.EVENT_CD = cvg.CODE_VALUE AND re.HEALTH_SYSTEM_SOURCE_ID = cvg.HEALTH_SYSTEM_SOURCE_ID
-),
-final_events AS (
-    -- Using explicit columns instead of SELECT * is a best practice.
-    SELECT 
-        HEALTH_SYSTEM_SOURCE_ID,
-        ENCNTR_ID,
-        PERFORMED_DT_TM,
-        PERFORMED_PRSNL_ID,
-        RESULT_VAL,
-        display_group
-    FROM filtered_events
-    WHERE rn = 1
-)
-SELECT
-    foo.health_system_source_id,
-    foo.mrn,
-    foo.pan,
-    foo.encntr_id,
-    foo.fac_cd,
-    foo.person_id,
-    foo.patient_name,
-    foo.patient_dob,
-    foo.encounter_updt_dt_tm,
-    foo.ADMIT_NURSING_STN,
-    foo.REASON_FOR_VISIT,
-    MAX(CASE WHEN fe.display_group = 'PERFORMED_DT_TM' THEN fe.PERFORMED_DT_TM ELSE NULL END) AS PERFORMED_DT_TM,
-    MAX(CASE WHEN fe.display_group = 'PERFORMED_DT_TM' THEN p1.NAME_FULL_FORMATTED ELSE NULL END) AS CHARTED_PHYS_ON_CALL_NM,
-    MAX(CASE WHEN fe.display_group = 'ARR_METHOD_CE' THEN fe.result_val ELSE NULL END) AS ARR_METHOD,
-    MAX(CASE WHEN fe.display_group = 'OUTCOME_CE' THEN fe.result_val ELSE NULL END) AS OUTCOME,
-    MAX(CASE WHEN fe.display_group = 'OUTCOME_LOC_CE' THEN fe.result_val ELSE NULL END) AS OUTCOME_LOCATION
-FROM
-    all_hs_fn_temp1 AS foo
-INNER JOIN
-    final_events AS fe ON foo.encntr_id = fe.ENCNTR_ID AND foo.HEALTH_SYSTEM_SOURCE_ID = fe.HEALTH_SYSTEM_SOURCE_ID
-LEFT OUTER JOIN
-    thcdnaproddata.cerner_ods.cerner_prsnl_hist AS p1
-    ON fe.PERFORMED_PRSNL_ID = p1.PERSON_ID AND fe.HEALTH_SYSTEM_SOURCE_ID = p1.HEALTH_SYSTEM_SOURCE_ID
--- Using explicit column names in GROUP BY is safer and more readable than ordinals.
-GROUP BY
-    foo.health_system_source_id,
-    foo.mrn,
-    foo.pan,
-    foo.encntr_id,
-    foo.fac_cd,
-    foo.person_id,
-    foo.patient_name,
-    foo.patient_dob,
-    foo.encounter_updt_dt_tm,
-    foo.ADMIT_NURSING_STN,
-    foo.REASON_FOR_VISIT;
+SELECT order_id, hss_id, ordering_physician FROM cerner_data
+UNION ALL
+SELECT order_id, hss_id, ordering_physician FROM dmc_data;
 
 -- =================================================================================================
 -- 4. Validation Step: Compare the two tables and check optimized duplicates.

@@ -2,6 +2,14 @@ OPT_CREATED: 2026-07-01T05:24:31.409507
 
 
 ORIG:
+Elapsed time
+12 min 51 sec
+Slot time consumed 
+17 hr 48 min
+Bytes shuffled 
+1.16 TB
+Bytes spilled to disk 
+451.7 GB
 
 
 
@@ -10,4 +18,12 @@ ORIG:
 
 
 OPT: 
+Elapsed time
+9 min 24 sec
+Slot time consumed 
+15 hr 4 min
+Bytes shuffled 
+1.83 TB
+Bytes spilled to disk 
+660.68 GB
 

@@ -50,45 +50,31 @@ def automate_dvt_snapshots(dvt_script: str) -> str:
         
     return "\n\n".join(output_sqls)
 
-# =====================================================================
-# MAIN EXECUTION (Command Line Interface)
-# =====================================================================
+
 if __name__ == '__main__':
-    # Set up the command line argument parser
-    parser = argparse.ArgumentParser(description="Inject BigQuery Time Travel into DVT SQL scripts.")
     
-    # Required positional argument: the input file
-    parser.add_argument(
-        "input_file", 
-        help="Path to the original DVT .sql file that needs snapshotting."
-    )
-    
-    # Optional argument: the output file (defaults to snapshot_optimized_dvt.sql)
-    parser.add_argument(
-        "-o", "--output", 
-        default="snapshot_optimized_dvt.sql", 
-        help="Path where the formatted snapshot script will be saved."
-    )
-    
-    # Parse the arguments from the terminal
-    args = parser.parse_args()
+    # 1. Define your exact file names here
+    INPUT_FILE = "dvt.sql" 
+    OUTPUT_FILE = "snapshot_optimized_dvt_modified.sql"
     
     # Verify the input file actually exists before trying to read it
-    if not os.path.exists(args.input_file):
-        print(f"Error: The file '{args.input_file}' was not found.")
+    if not os.path.exists(INPUT_FILE):
+        print(f"Error: The file '{INPUT_FILE}' was not found in the current directory.")
+        import sys
         sys.exit(1)
         
-    print(f"Reading DVT Script from: {args.input_file}...")
+    print(f"Reading DVT Script from: {INPUT_FILE}...")
     
     # Read the contents of the provided SQL file
-    with open(args.input_file, "r") as file:
+    with open(INPUT_FILE, "r") as file:
         raw_sql = file.read()
         
     print("Processing AST and injecting Time Travel clauses...")
     final_sql = automate_dvt_snapshots(raw_sql)
     
     # Write the results to the output file
-    with open(args.output, "w") as file:
+    with open(OUTPUT_FILE, "w") as file:
         file.write(final_sql)
         
-    print(f"Success! The automated snapshot script has been saved to: {os.path.abspath(args.output)}")
+    import os
+    print(f"Success! The automated snapshot script has been saved to: {os.path.abspath(OUTPUT_FILE)}")
