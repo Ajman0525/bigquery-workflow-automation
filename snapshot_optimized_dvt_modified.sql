@@ -21,127 +21,70 @@ CREATE OR REPLACE TEMPORARY TABLE V_TEMP_TABLE_ORIG AS
 SELECT
   *
 FROM (
-  /* CERNER */
-  SELECT DISTINCT
-    o.order_id,
-    o.health_system_source_id AS hss_id,
-    p.name_full_formatted AS ordering_physician
-  FROM thcdnaproddata.cerner_ods.cerner_orders_hist AS o FOR SYSTEM_TIME AS OF freeze_time
-  INNER JOIN thcdnaproddata.cerner_ods.cerner_order_action_hist AS oa FOR SYSTEM_TIME AS OF freeze_time
-    ON oa.order_id = o.order_id
-    AND oa.health_system_source_id = o.health_system_source_id
-    AND oa.order_provider_id > 0
-    AND oa.action_sequence = 1
-  INNER JOIN thcdnaproddata.cerner_ods.cerner_code_value_hist AS cv FOR SYSTEM_TIME AS OF freeze_time
-    ON oa.action_type_cd = cv.code_value
-    AND cv.display = 'Order'
-    AND oa.health_system_source_id = cv.health_system_source_id
-  INNER JOIN thcdnaproddata.cerner_ods.cerner_prsnl_hist AS p FOR SYSTEM_TIME AS OF freeze_time
-    ON p.person_id = oa.order_provider_id
-  INNER JOIN thcdnaproddata.cerner_ods.cerner_code_value_hist AS f FOR SYSTEM_TIME AS OF freeze_time
-    ON p.health_system_source_id = f.health_system_source_id
-    AND f.code_value = p.position_cd
+  SELECT
+    s_o.HEALTH_SYSTEM_SOURCE_ID AS order_hss_id,
+    s_o.ORDER_ID AS ORDER_ID,
+    s_o.ENCNTR_ID AS ENCNTR_ID,
+    s_o.PERSON_ID AS PERSON_ID,
+    s_o.ordered_as_mnemonic AS ordered_as_mnemonic,
+    s_o.ORDER_MNEMONIC AS PRIMARY_MNEMONIC,
+    s_o.CLINICAL_DISPLAY_LINE,
+    s_o.ORDER_DETAIL_DISPLAY_LINE
+  FROM thcdnaproddata.aci.oredr_mnemonic_stg1 AS stg1 FOR SYSTEM_TIME AS OF freeze_time
+  INNER JOIN thcdnaproddata.cerner_ods.cerner_orders_hist AS s_o FOR SYSTEM_TIME AS OF freeze_time
+    ON s_o.HEALTH_SYSTEM_SOURCE_ID = stg1.order_hss_id AND s_o.ORDER_ID = stg1.ORDER_id
   UNION ALL
-  /* -DMC */
-  SELECT DISTINCT
-    o.order_id,
-    o.health_system_source_id AS hss_id,
-    p.name_full_formatted AS ordering_physician
-  FROM thcdnaproddata.cerner_ods.dmc_orders_hist AS o FOR SYSTEM_TIME AS OF freeze_time
-  INNER JOIN thcdnaproddata.cerner_ods.dmc_order_action_hist AS oa FOR SYSTEM_TIME AS OF freeze_time
-    ON oa.order_id = o.order_id
-    AND oa.health_system_source_id = o.health_system_source_id
-    AND oa.order_provider_id > 0
-    AND oa.action_sequence = 1
-  INNER JOIN thcdnaproddata.cerner_ods.dmc_code_value_hist AS cv FOR SYSTEM_TIME AS OF freeze_time
-    ON oa.action_type_cd = cv.code_value
-    AND cv.display = 'Order'
-    AND oa.health_system_source_id = cv.health_system_source_id
-  INNER JOIN thcdnaproddata.cerner_ods.dmc_prsnl_hist AS p FOR SYSTEM_TIME AS OF freeze_time
-    ON p.person_id = oa.order_provider_id
-  INNER JOIN thcdnaproddata.cerner_ods.dmc_code_value_hist AS f FOR SYSTEM_TIME AS OF freeze_time
-    ON p.health_system_source_id = f.health_system_source_id
-    AND f.code_value = p.position_cd
+  SELECT
+    s_o.HEALTH_SYSTEM_SOURCE_ID AS order_hss_id,
+    s_o.ORDER_ID AS ORDER_ID,
+    s_o.ENCNTR_ID AS ENCNTR_ID,
+    s_o.PERSON_ID AS PERSON_ID,
+    s_o.ordered_as_mnemonic AS ordered_as_mnemonic,
+    s_o.ORDER_MNEMONIC AS PRIMARY_MNEMONIC,
+    s_o.CLINICAL_DISPLAY_LINE,
+    s_o.ORDER_DETAIL_DISPLAY_LINE
+  FROM thcdnaproddata.aci.oredr_mnemonic_stg1 AS stg1 FOR SYSTEM_TIME AS OF freeze_time
+  INNER JOIN thcdnaproddata.cerner_ods.dmc_orders_hist AS s_o FOR SYSTEM_TIME AS OF freeze_time
+    ON s_o.HEALTH_SYSTEM_SOURCE_ID = stg1.order_hss_id AND s_o.ORDER_ID = stg1.ORDER_id
 ) AS foo;
 
 /* ================================================================================================= */
 /* 3. Create the Optimized Temporary Table (V_TEMP_TABLE_OPT) */
 /* ================================================================================================= */
 CREATE OR REPLACE TEMPORARY TABLE V_TEMP_TABLE_OPT AS
-WITH cerner_data AS (
-  SELECT DISTINCT
-    o.order_id,
-    o.health_system_source_id AS hss_id,
-    p.name_full_formatted AS ordering_physician
-  FROM `thcdnaproddata.cerner_ods.cerner_orders_hist` AS o FOR SYSTEM_TIME AS OF freeze_time
-  INNER JOIN `thcdnaproddata.cerner_ods.cerner_order_action_hist` AS oa FOR SYSTEM_TIME AS OF freeze_time
-    ON o.order_id = oa.order_id
-    AND o.health_system_source_id = oa.health_system_source_id
-  INNER JOIN `thcdnaproddata.cerner_ods.cerner_prsnl_hist` AS p FOR SYSTEM_TIME AS OF freeze_time
-    ON oa.order_provider_id = p.person_id
-  WHERE
-    oa.action_sequence = 1
-    AND oa.order_provider_id > 0
-    AND /* Replaced INNER JOIN to 'cv' with a more efficient EXISTS subquery to act as a filter */ EXISTS(
-      SELECT
-        1
-      FROM `thcdnaproddata.cerner_ods.cerner_code_value_hist` AS cv FOR SYSTEM_TIME AS OF freeze_time
-      WHERE
-        cv.code_value = oa.action_type_cd
-        AND cv.health_system_source_id = oa.health_system_source_id
-        AND cv.display = 'Order'
-    )
-    AND /* Replaced filtering INNER JOIN to 'f' with a more efficient EXISTS subquery */ EXISTS(
-      SELECT
-        1
-      FROM `thcdnaproddata.cerner_ods.cerner_code_value_hist` AS f FOR SYSTEM_TIME AS OF freeze_time
-      WHERE
-        f.code_value = p.position_cd
-        AND f.health_system_source_id = p.health_system_source_id
-    )
-), dmc_data AS (
-  SELECT DISTINCT
-    o.order_id,
-    o.health_system_source_id AS hss_id,
-    p.name_full_formatted AS ordering_physician
-  FROM `thcdnaproddata.cerner_ods.dmc_orders_hist` AS o FOR SYSTEM_TIME AS OF freeze_time
-  INNER JOIN `thcdnaproddata.cerner_ods.dmc_order_action_hist` AS oa FOR SYSTEM_TIME AS OF freeze_time
-    ON o.order_id = oa.order_id
-    AND o.health_system_source_id = oa.health_system_source_id
-  INNER JOIN `thcdnaproddata.cerner_ods.dmc_prsnl_hist` AS p FOR SYSTEM_TIME AS OF freeze_time
-    ON oa.order_provider_id = p.person_id
-  WHERE
-    oa.action_sequence = 1
-    AND oa.order_provider_id > 0
-    AND /* Replaced INNER JOIN to 'cv' with a more efficient EXISTS subquery to act as a filter */ EXISTS(
-      SELECT
-        1
-      FROM `thcdnaproddata.cerner_ods.dmc_code_value_hist` AS cv FOR SYSTEM_TIME AS OF freeze_time
-      WHERE
-        cv.code_value = oa.action_type_cd
-        AND cv.health_system_source_id = oa.health_system_source_id
-        AND cv.display = 'Order'
-    )
-    AND /* Replaced filtering INNER JOIN to 'f' with a more efficient EXISTS subquery */ EXISTS(
-      SELECT
-        1
-      FROM `thcdnaproddata.cerner_ods.dmc_code_value_hist` AS f FOR SYSTEM_TIME AS OF freeze_time
-      WHERE
-        f.code_value = p.position_cd
-        AND f.health_system_source_id = p.health_system_source_id
-    )
+WITH stg1_keys AS (
+  SELECT
+    order_hss_id,
+    ORDER_id
+  FROM thcdnaproddata.aci.oredr_mnemonic_stg1 FOR SYSTEM_TIME AS OF freeze_time
 )
 SELECT
-  order_id,
-  hss_id,
-  ordering_physician
-FROM cerner_data
+  s_o.HEALTH_SYSTEM_SOURCE_ID AS order_hss_id,
+  s_o.ORDER_ID AS ORDER_ID,
+  s_o.ENCNTR_ID AS ENCNTR_ID,
+  s_o.PERSON_ID AS PERSON_ID,
+  s_o.ordered_as_mnemonic AS ordered_as_mnemonic,
+  s_o.ORDER_MNEMONIC AS PRIMARY_MNEMONIC,
+  s_o.CLINICAL_DISPLAY_LINE,
+  s_o.ORDER_DETAIL_DISPLAY_LINE
+FROM stg1_keys
+INNER JOIN thcdnaproddata.cerner_ods.cerner_orders_hist AS s_o FOR SYSTEM_TIME AS OF freeze_time
+  ON s_o.HEALTH_SYSTEM_SOURCE_ID = stg1_keys.order_hss_id
+  AND s_o.ORDER_ID = stg1_keys.ORDER_id
 UNION ALL
 SELECT
-  order_id,
-  hss_id,
-  ordering_physician
-FROM dmc_data;
+  s_o.HEALTH_SYSTEM_SOURCE_ID AS order_hss_id,
+  s_o.ORDER_ID AS ORDER_ID,
+  s_o.ENCNTR_ID AS ENCNTR_ID,
+  s_o.PERSON_ID AS PERSON_ID,
+  s_o.ordered_as_mnemonic AS ordered_as_mnemonic,
+  s_o.ORDER_MNEMONIC AS PRIMARY_MNEMONIC,
+  s_o.CLINICAL_DISPLAY_LINE,
+  s_o.ORDER_DETAIL_DISPLAY_LINE
+FROM stg1_keys
+INNER JOIN thcdnaproddata.cerner_ods.dmc_orders_hist AS s_o FOR SYSTEM_TIME AS OF freeze_time
+  ON s_o.HEALTH_SYSTEM_SOURCE_ID = stg1_keys.order_hss_id
+  AND s_o.ORDER_ID = stg1_keys.ORDER_id;
 
 /* ================================================================================================= */
 /* 4. Validation Step: Compare the two tables and check optimized duplicates. */
