@@ -1,22 +1,22 @@
 # entity: uspi
 # metric-name: DEATH_BY_THOUSAND_CUTS
-# parent: 64da95b5-d5e0-4130-91d8-66e90e324a38
-# job_id: script_job_0de033747e1c01943e18612fee8b2264_72
+# parent: eb9adb06-b5d0-454a-a202-59599ef12eae
+# job_id: script_job_92e317d7631b57ebe1946253ef60e35f_16
 
 
 python automation.py \
     --entity uspi \
     --metric-name DEATH_BY_THOUSAND_CUTS \
-    --parent-job-id 64da95b5-d5e0-4130-91d8-66e90e324a38 \
-    --job-id script_job_0de033747e1c01943e18612fee8b2264_72
+    --parent-job-id eb9adb06-b5d0-454a-a202-59599ef12eae \
+    --job-id script_job_92e317d7631b57ebe1946253ef60e35f_16
 
 
 # python automation.py \
-#      --rerun-job-id script_job_0de033747e1c01943e18612fee8b2264_72
+#      --rerun-job-id script_job_92e317d7631b57ebe1946253ef60e35f_16
 
 # python automation.py \
-#      --rerun-job-id-no-workflow script_job_0de033747e1c01943e18612fee8b2264_72
+#      --rerun-job-id-no-workflow script_job_92e317d7631b57ebe1946253ef60e35f_16
 
 
-# last-generated-sh: 06 July 2026 17:03:49
+# last-generated-sh: 07 July 2026 21:44:31
 # row: {EDIT ME}
