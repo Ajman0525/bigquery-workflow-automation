@@ -15,6 +15,12 @@ import re
 import shutil
 import sys
 import time
+import csv
+import concurrent.futures
+from pathlib import Path
+from typing import List, Dict, Any
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.console import Console
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +31,7 @@ from google.auth.transport.requests import AuthorizedSession
 from google.cloud import bigquery
 from openpyxl import load_workbook
 
+console = Console()
 
 ROOT_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = ROOT_DIR / "templates" / "job_id"
@@ -2922,7 +2929,131 @@ def read_text_if_exists(path: Path) -> str:
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(normalize_newlines(text), encoding="utf-8", newline="\n")
+    
 
+def fetch_jobs_by_owner(csv_path: str, target_owner: str) -> List[dict]:
+    """1) Fetch multiple deliverables from the CSV based on the owner name."""
+    jobs = []
+    with open(csv_path, mode='r', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get('owner', '').strip().lower() == target_owner.lower():
+                jobs.append(row)
+    return jobs
+
+def execute_dvt_query(automation: Any, item: Any, job_dir: Path) -> str:
+    """3) Run the generated DVT (6_exec_query.sql) and return the output or error."""
+    dvt_file = job_dir / "6_exec_query.sql"
+    if not dvt_file.exists():
+        return "ERROR: 6_exec_query.sql not found."
+    
+    sql_text = dvt_file.read_text(encoding="utf-8")
+    
+    try:
+        client = automation.bq_clients.get((automation.cloud_settings.bq_job_project, automation.cloud_settings.bq_location))
+        if not client:
+            client = automation.bq 
+            
+        query_job = client.query(sql_text)
+        results = query_job.result() 
+        
+        row_count = results.total_rows
+        return f"SUCCESS: DVT executed. {row_count} rows returned."
+        
+    except Exception as e:
+        return f"ERROR: DVT execution failed - {str(e)}"
+
+def process_single_job(row: dict, args: Any, progress: Progress, task_id: int) -> Dict[str, str]:
+    """Handles the full workflow for a single job ID."""
+    job_id = row.get('job_id')
+    progress.update(task_id, description=f"[cyan]Processing {job_id} - Initializing...")
+    
+    try:
+        item = ConfigItem(
+            entity=row.get('Entity', 'default_entity'),
+            metric_name=row.get('metric_name', 'default_metric'),
+            parent_job_id=row.get('parent_job_id', ''),
+            job_id=job_id
+        )
+        
+        automation = ArtifactAutomation(args)
+        
+        progress.update(task_id, description=f"[yellow]Processing {job_id} - Generating Artifacts...")
+        automation.process_item(item)
+        
+        attempt_number = automation.resolve_attempt_number(item)
+        job_dir = item.job_root / f"attempt_{attempt_number}"
+        
+        progress.update(task_id, description=f"[blue]Processing {job_id} - Executing DVT...")
+        dvt_result = execute_dvt_query(automation, item, job_dir)
+        
+        progress.update(task_id, description=f"[green]Completed {job_id}", completed=100)
+        return {"job_id": job_id, "status": dvt_result}
+
+    except Exception as e:
+        progress.update(task_id, description=f"[red]Failed {job_id}", completed=100)
+        return {"job_id": job_id, "status": f"PIPELINE ERROR: {str(e)}"}
+
+# UPDATED: max_workers defaults to 5
+def run_concurrent_batch(csv_path: str, owner: str, args: Any, max_workers: int = 5):
+    """Orchestrates the concurrent execution and CLI dashboard."""
+    target_jobs = fetch_jobs_by_owner(csv_path, owner)
+    
+    if not target_jobs:
+        console.print(f"[bold red]No jobs found for owner: {owner}[/bold red]")
+        return
+
+    console.print(f"[bold green]Found {len(target_jobs)} jobs for {owner}. Starting concurrent processing with {max_workers} workers...[/bold green]")
+
+    results = []
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        console=console,
+    ) as progress:
+        
+        futures_map = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for row in target_jobs:
+                job_id = row.get('job_id', 'Unknown')
+                task_id = progress.add_task(f"[cyan]Pending {job_id}", total=100)
+                future = executor.submit(process_single_job, row, args, progress, task_id)
+                futures_map[future] = job_id
+            
+            for future in concurrent.futures.as_completed(futures_map):
+                job_id = futures_map[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception as exc:
+                    results.append({"job_id": job_id, "status": f"FATAL THREAD ERROR: {exc}"})
+
+    console.print("\n[bold]Execution Summary:[/bold]")
+    for res in results:
+        status_color = "green" if "SUCCESS" in res['status'] else "red"
+        console.print(f"Job: [bold]{res['job_id']}[/bold] | Status: [{status_color}]{res['status']}[/{status_color}]")
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import sys
+    
+    # Parse standard arguments using your existing parser
+    args = parse_args(sys.argv[1:])
+    
+    # Set the path to your downloaded CSV
+    csv_file_path = "config.csv" 
+    
+    # Run the batch for a specific owner
+    target_owner = "Ajman"
+    
+    try:
+        run_concurrent_batch(
+            csv_path=csv_file_path, 
+            owner=target_owner, 
+            args=args, 
+            max_workers=5
+        )
+    except Exception as e:
+        console.print(f"[bold red]Execution halted: {e}[/bold red]")        
