@@ -1,5 +1,6 @@
 .env
 *.sh
+dvt.sql
 snapshot_optimized_dvt_modified.sql
 snapshot_optimized_dvt.sql
 snapshot.py
