@@ -2935,8 +2935,8 @@ def fetch_jobs_by_owner(csv_path: str, target_owner: str) -> List[dict]:
         reader = csv.DictReader(f)
         for row in reader:
             # Get the values and clean them up for safe comparison
-            owner = row.get('owner_name', '').strip().lower()
-            status = row.get('status', '').strip().lower()
+            owner = row.get('owner', '').strip().lower()
+            status = row.get('Status', '').strip().lower()
             
             # Check if BOTH conditions are met
             if owner == target_owner.lower() and status == target_status:
@@ -2946,14 +2946,16 @@ def fetch_jobs_by_owner(csv_path: str, target_owner: str) -> List[dict]:
 
 def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids: List[str], progress: Progress, task_id: int) -> Dict[str, str]:
     """Handles artifact generation for a single job ID."""
-    job_id = row.get('job_id', 'Unknown_ID')
+    
+    # Mapped exactly to your CSV column headers
+    job_id = row.get('job_id', '').strip()
     progress.update(task_id, description=f"[cyan]Processing {job_id} - Initializing...")
     
     try:
         item = ConfigItem(
-            entity=row.get('entity', ''),
-            metric_name=row.get('metric_name', ''),
-            parent_job_id=row.get('parent_job_id', ''),
+            entity=row.get('Entity', '').strip(),            
+            metric_name=row.get('metric_name', '').strip(), 
+            parent_job_id=row.get('parent_job_id', '').strip(),
             job_id=job_id
         )
         
@@ -2962,7 +2964,7 @@ def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids
         
         # Check if this specific job ID was flagged for a forced rerun
         if job_id in force_rerun_ids:
-            local_args.rerun_job_id = job_id  # Inject the original rerun logic for this thread
+            local_args.rerun_job_id = job_id  
             progress.update(task_id, description=f"[yellow]Processing {job_id} - FORCING NEW WORKFLOW...")
         else:
             local_args.rerun_job_id = None
