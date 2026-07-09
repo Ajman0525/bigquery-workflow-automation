@@ -84,68 +84,39 @@ SELECT
   *
 FROM `dim_fact_sd_temp`;
 
-MERGE INTO V_TEMP_TABLE_ORIG AS target
-USING (
+UPDATE V_TEMP_TABLE_ORIG AS a SET a.procedure_combination = src.procedure_combination
+FROM (
   SELECT
-    A.source_system_id,
-    A.prim_sched_num,
-    A.appt_date,
-    A.prim_sched_begin_time,
-    A.prim_sched_end_time,
-    B.num AS block_code,
-    ROW_NUMBER() OVER (
-      PARTITION BY A.source_system_id, A.prim_sched_num, A.appt_date, A.prim_sched_begin_time, A.prim_sched_end_time
-      ORDER BY B.num
-    ) AS row_num
-  FROM dim_fact_sd_temp AS A
-  INNER JOIN `advantx_ods.as_grid` AS B FOR SYSTEM_TIME AS OF freeze_time
-    ON A.source_system_id = B.source_system_id
-    AND A.prim_sched_num = B.sched_num
-    AND B.blocktype_num = 2
-    AND A.appt_date = B.sched_date
-    AND (
-      (
-        (
-          EXTRACT(HOUR FROM A.prim_sched_begin_time) * 60
-        ) + EXTRACT(MINUTE FROM A.prim_sched_begin_time)
-      ) BETWEEN (
-        (
-          EXTRACT(HOUR FROM B.sched_begin_time) * 60
-        ) + EXTRACT(MINUTE FROM B.sched_begin_time)
-      ) AND (
-        (
-          EXTRACT(HOUR FROM B.sched_end_time) * 60
-        ) + EXTRACT(MINUTE FROM B.sched_end_time) - 1
-      )
-      OR (
-        (
-          EXTRACT(HOUR FROM A.prim_sched_end_time) * 60
-        ) + EXTRACT(MINUTE FROM A.prim_sched_end_time)
-      ) BETWEEN (
-        (
-          EXTRACT(HOUR FROM B.sched_begin_time) * 60
-        ) + EXTRACT(MINUTE FROM B.sched_begin_time)
-      ) AND (
-        (
-          EXTRACT(HOUR FROM B.sched_end_time) * 60
-        ) + EXTRACT(MINUTE FROM B.sched_end_time) - 1
-      )
-    )
-  INNER JOIN `advantx_ods.ut_sched` AS C FOR SYSTEM_TIME AS OF freeze_time
-    ON A.source_system_id = C.source_system_id
-    AND A.phys_pers_org_num = C.pers_org_num
-    AND B.source_system_id = C.source_system_id
-    AND B.block_phys_sched_num = C.num
-) AS source
-ON target.source_system_id = source.source_system_id
-AND target.prim_sched_num = source.prim_sched_num
-AND target.appt_date = source.appt_date
-AND target.prim_sched_begin_time = source.prim_sched_begin_time
-AND target.prim_sched_end_time = source.prim_sched_end_time
-AND source.row_num = 1 /* Ensure only the top-ranked row is used */
-AND source.source_system_id = V_source_system
-WHEN MATCHED THEN UPDATE SET
-  target.block_code = CAST(source.block_code AS STRING);
+    a.source_system_id,
+    a.appointment_num,
+    STRING_AGG(DISTINCT procedure_code, '/') AS procedure_combination
+  FROM (
+    SELECT
+      a.source_system_id,
+      a.appointment_num,
+      app_pr.order_num,
+      pr.quick_code AS procedure_code,
+      UPPER(stat.description) AS appt_status
+    FROM dim_fact_sd_temp AS a
+    INNER JOIN `uspidnaproddata.advantx_ods.as_appointment_procs` AS app_pr FOR SYSTEM_TIME AS OF freeze_time
+      ON a.source_system_id = app_pr.source_system_id
+      AND a.appointment_num = app_pr.appointment_num
+    /* AND app_pr.order_num = 1 --get all procedure code */
+    INNER JOIN `uspidnaproddata.advantx_ods.ut_proc` AS pr FOR SYSTEM_TIME AS OF freeze_time
+      ON app_pr.source_system_id = pr.source_system_id AND app_pr.proc_num = pr.num
+    INNER JOIN `uspidnaproddata.advantx_ods.it_appointstat` AS stat FOR SYSTEM_TIME AS OF freeze_time
+      ON pr.source_system_id = stat.source_system_id AND a.appointstat_num = stat.num
+  ) AS a
+  WHERE
+    NOT procedure_code IS NULL
+  GROUP BY
+    1,
+    2
+) AS src
+WHERE
+  a.source_system_id = src.source_system_id
+  AND a.appointment_num = src.appointment_num
+  AND src.source_system_id = V_source_system;
 
 /* ================================================================================================= */
 /* 3. Create the Optimized Temporary Table (V_TEMP_TABLE_OPT) */
@@ -157,72 +128,30 @@ FROM `dim_fact_sd_temp`;
 
 MERGE INTO V_TEMP_TABLE_OPT AS target
 USING (
-  WITH dim_fact_sd_temp_w_minutes AS (
-    SELECT
-      source_system_id,
-      prim_sched_num,
-      appt_date,
-      prim_sched_begin_time,
-      prim_sched_end_time,
-      phys_pers_org_num,
-      TIME_DIFF(CAST(prim_sched_begin_time AS TIME), CAST('00:00:00' AS TIME), MINUTE) AS start_minute,
-      TIME_DIFF(CAST(prim_sched_end_time AS TIME), CAST('00:00:00' AS TIME), MINUTE) AS end_minute
-    FROM dim_fact_sd_temp
-    WHERE
-      source_system_id = V_source_system
-  ), as_grid_w_minutes AS (
-    SELECT
-      source_system_id,
-      sched_num,
-      sched_date,
-      num,
-      block_phys_sched_num,
-      TIME_DIFF(CAST(sched_begin_time AS TIME), CAST('00:00:00' AS TIME), MINUTE) AS start_minute,
-      TIME_DIFF(CAST(sched_end_time AS TIME), CAST('00:00:00' AS TIME), MINUTE) AS end_minute
-    FROM `advantx_ods.as_grid` FOR SYSTEM_TIME AS OF freeze_time
-    WHERE
-      blocktype_num = 2 AND source_system_id = V_source_system
-  )
+  /* Pre-calculate the aggregated procedure codes for relevant appointments */
   SELECT
-    A.source_system_id,
-    A.prim_sched_num,
-    A.appt_date,
-    A.prim_sched_begin_time,
-    A.prim_sched_end_time,
-    B.num AS block_code,
-    ROW_NUMBER() OVER (
-      PARTITION BY A.source_system_id, A.prim_sched_num, A.appt_date, A.prim_sched_begin_time, A.prim_sched_end_time
-      ORDER BY B.num ASC
-    ) AS row_num
-  FROM dim_fact_sd_temp_w_minutes AS A
-  INNER JOIN as_grid_w_minutes AS B
-    ON A.source_system_id = B.source_system_id
-    AND A.prim_sched_num = B.sched_num
-    AND A.appt_date = B.sched_date
-    AND (
-      A.start_minute BETWEEN B.start_minute AND (
-        B.end_minute - 1
-      )
-      OR A.end_minute BETWEEN B.start_minute AND (
-        B.end_minute - 1
-      )
-    )
-  INNER JOIN `advantx_ods.ut_sched` AS C FOR SYSTEM_TIME AS OF freeze_time
-    ON A.source_system_id = C.source_system_id
-    AND A.phys_pers_org_num = C.pers_org_num
-    AND B.block_phys_sched_num = C.num
+    a.source_system_id,
+    a.appointment_num,
+    STRING_AGG(DISTINCT pr.quick_code, '/') AS procedure_combination
+  FROM dim_fact_sd_temp AS a
+  INNER JOIN `uspidnaproddata.advantx_ods.as_appointment_procs` AS app_pr FOR SYSTEM_TIME AS OF freeze_time
+    ON a.source_system_id = app_pr.source_system_id
+    AND a.appointment_num = app_pr.appointment_num
+  INNER JOIN `uspidnaproddata.advantx_ods.ut_proc` AS pr FOR SYSTEM_TIME AS OF freeze_time
+    ON app_pr.source_system_id = pr.source_system_id AND app_pr.proc_num = pr.num
+  INNER JOIN `uspidnaproddata.advantx_ods.it_appointstat` AS stat FOR SYSTEM_TIME AS OF freeze_time
+    ON a.source_system_id = stat.source_system_id AND a.appointstat_num = stat.num
   WHERE
-    C.source_system_id = V_source_system
+    a.source_system_id = V_source_system /* Filter applied early */
+    AND NOT pr.quick_code IS NULL
+  GROUP BY
+    a.source_system_id,
+    a.appointment_num
 ) AS source
 ON target.source_system_id = source.source_system_id
-AND target.prim_sched_num = source.prim_sched_num
-AND target.appt_date = source.appt_date
-AND target.prim_sched_begin_time = source.prim_sched_begin_time
-AND target.prim_sched_end_time = source.prim_sched_end_time
-AND source.row_num = 1
-AND source.source_system_id = V_source_system
+AND target.appointment_num = source.appointment_num
 WHEN MATCHED THEN UPDATE SET
-  target.block_code = CAST(source.block_code AS STRING);
+  procedure_combination = source.procedure_combination;
 
 /* ================================================================================================= */
 /* 4. Validation Step: Compare the two tables and check optimized duplicates. */

@@ -7,9 +7,6 @@
 /* 1. Stored Procedure Context */ 
 /* ================================================================================================= */ 
 /* START STORED PROCEDURE CONTEXT */ 
-/* Auto-generated from 2_sp_details.sql and 3_orig_sp.sql. */ 
-/* WARNING: Review the TODO items before relying on this validation script. */ 
-/* TODO: Verify temp table temp_ca_visit_visitdept; no prior temp-table creation was found. It may be created by dynamic SQL. */
 
 DECLARE freeze_time TIMESTAMP DEFAULT TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR);
 DECLARE   facility_id STRING DEFAULT 'sjos' ;

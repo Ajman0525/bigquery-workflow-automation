@@ -9,8 +9,8 @@ USING (
       prim_sched_begin_time,
       prim_sched_end_time,
       phys_pers_org_num,
-      TIME_DIFF(prim_sched_begin_time, TIME'00:00:00', MINUTE) AS start_minute,
-      TIME_DIFF(prim_sched_end_time, TIME'00:00:00', MINUTE) AS end_minute
+      TIME_DIFF(CAST(prim_sched_begin_time AS TIME), TIME'00:00:00', MINUTE) AS start_minute,
+      TIME_DIFF(CAST(prim_sched_end_time AS TIME), TIME'00:00:00', MINUTE) AS end_minute
     FROM dim_fact_sd_temp
     WHERE source_system_id = V_source_system
   ),
@@ -21,8 +21,8 @@ USING (
       sched_date,
       num,
       block_phys_sched_num,
-      TIME_DIFF(sched_begin_time, TIME'00:00:00', MINUTE) AS start_minute,
-      TIME_DIFF(sched_end_time, TIME'00:00:00', MINUTE) AS end_minute
+      TIME_DIFF(CAST(sched_begin_time AS TIME), TIME'00:00:00', MINUTE) AS start_minute,
+      TIME_DIFF(CAST(sched_end_time AS TIME), TIME'00:00:00', MINUTE) AS end_minute
     FROM `advantx_ods.as_grid`
     WHERE blocktype_num = 2
       AND source_system_id = V_source_system
@@ -62,4 +62,4 @@ AND source.row_num = 1
 AND source.source_system_id = V_source_system
 WHEN MATCHED THEN
   UPDATE SET
-    target.block_code = CAST(source.block_code AS STRING)
+    target.block_code = CAST(source.block_code AS STRING);
