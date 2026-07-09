@@ -2970,11 +2970,13 @@ def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids
             progress.update(task_id, description=f"[blue]Processing {job_id} - Fetching/Generating Artifacts...")
             
         automation = ArtifactAutomation(local_args)
-        automation.process_item(item)
         
-        # --- GENERATE DOCUMENTATION ARTIFACT ---
+        # --- GENERATE DOCUMENTATION FIRST ---
         attempt_number = automation.resolve_attempt_number(item)
         job_dir = item.job_root / f"attempt_{attempt_number}"
+        
+        # Create the directory structure manually first so we can write the doc
+        job_dir.mkdir(parents=True, exist_ok=True)
         
         doc_file = job_dir / "0_documentation.md"
         doc_content = (
@@ -2988,12 +2990,14 @@ def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids
             f"- **SP Name:** {row.get('SP_Name', 'N/A')}\n"
             f"- **Frequency:** {row.get('frequency', 'N/A')}\n\n"
             f"## Notes\n{row.get('notes', 'None provided.')}\n\n"
-            f"## Comments\n{row.get('comments', 'None provided.')}\n"
+            f"## Comments\n{row.get('comments', 'None provided.')}\n\n"
             f"## Error Message\n{row.get('error_message', 'None provided.')}\n"
         )
-        # Write the file directly into the artifact folder
         doc_file.write_text(doc_content, encoding="utf-8")
-        # --------------------------------------------
+        # ----------------------------------------------
+
+        # Now execute the heavy BigQuery operations
+        automation.process_item(item)
         
         progress.update(task_id, description=f"[green]Completed {job_id}", completed=100)
         
