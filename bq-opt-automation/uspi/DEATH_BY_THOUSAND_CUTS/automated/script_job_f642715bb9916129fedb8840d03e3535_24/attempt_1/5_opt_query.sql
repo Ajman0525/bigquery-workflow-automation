@@ -1,3 +1,33 @@
+INSERT INTO MEDIBIS_FACT_CE_temp
+                (company_code
+                ,facility_code
+                ,physician_code
+                ,procedure_code
+                ,patient_code
+                ,date_of_service
+                ,case_id
+                ,patient_type_code
+                ,visit_type_code
+                ,case_count
+                ,procedure_count
+                ,financial_year
+                ,financial_period
+                ,billing_period
+                ,billing_period_start_date
+                ,case_num
+				,tisclient_num
+                ,cpt_procedure_code
+                ,account_name
+                ,case_charge_amount
+                ,case_primary_payment_amount
+                ,case_copay_payment_amount
+                ,case_writeoff_amount
+                ,entity_code
+                ,refer_physician_code
+                ,acuity_flag
+                ,units
+                ,source_system_id)
+
 WITH
 -- CTE for subquery 'F' to gather charge details.
 subquery_F AS (
@@ -67,35 +97,6 @@ cases_with_id AS (
     FROM `uspidnaproddata.advantx_ods.ca_case`
 )
 
-INSERT INTO MEDIBIS_FACT_CE_temp
-                (company_code
-                ,facility_code
-                ,physician_code
-                ,procedure_code
-                ,patient_code
-                ,date_of_service
-                ,case_id
-                ,patient_type_code
-                ,visit_type_code
-                ,case_count
-                ,procedure_count
-                ,financial_year
-                ,financial_period
-                ,billing_period
-                ,billing_period_start_date
-                ,case_num
-				,tisclient_num
-                ,cpt_procedure_code
-                ,account_name
-                ,case_charge_amount
-                ,case_primary_payment_amount
-                ,case_copay_payment_amount
-                ,case_writeoff_amount
-                ,entity_code
-                ,refer_physician_code
-                ,acuity_flag
-                ,units
-                ,source_system_id)
 SELECT
     A.company_code,
     CAST(A.pers_org_num_org AS STRING) AS faclity_code, -- Note: Preserving original 'faclity_code' typo

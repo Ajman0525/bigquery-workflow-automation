@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "config": {
+    "entity": "USPI",
+    "metric_name": "DEATH_BY_THOUSAND_CUTS",
+    "parent_job_id": "f63982f5-6197-47a9-91b6-908f2411eb0b",
+    "job_id": "script_job_ad13bebde601d85cc10549e896505400_31",
+    "status_folder": "automated"
+  },
+  "attempt_number": 1,
+  "mode": "normal",
+  "completed_steps": [
+    "template",
+    "queries",
+    "sp_details",
+    "orig_sp",
+    "orig_query",
+    "optimized_query",
+    "exec_query",
+    "exec_details"
+  ],
+  "workflow_triggered": false,
+  "created_at": "2026-07-08T20:06:59",
+  "updated_at": "2026-07-08T20:08:52",
+  "optimized_result": {
+    "created_at": "2026-06-02T11:49:42.599177"
+  }
+}

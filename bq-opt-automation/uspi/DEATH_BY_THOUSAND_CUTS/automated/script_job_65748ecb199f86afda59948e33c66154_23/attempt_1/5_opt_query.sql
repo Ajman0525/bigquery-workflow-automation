@@ -46,8 +46,8 @@ case_financials AS (
   INNER JOIN `uspidnaproddata.advantx_ods.ut_insurtype` AS i ON j.source_system_id = i.source_system_id AND j.insurtype_num = i.num
   WHERE
     -- PERFORMANCE: This predicate enables partition pruning, assuming key_dos is a TIMESTAMP/DATETIME partition column.
-    a.key_dos >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 YEAR), YEAR))
-    AND a.key_dos < TIMESTAMP(DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY))
+    a.key_dos >= DATETIME(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 YEAR), YEAR))
+    AND a.key_dos < DATETIME(DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY))
     AND e.quick_code NOT IN ('ERROR', 'DUMMY')
     AND a.source_system_id = V_source_system
   GROUP BY

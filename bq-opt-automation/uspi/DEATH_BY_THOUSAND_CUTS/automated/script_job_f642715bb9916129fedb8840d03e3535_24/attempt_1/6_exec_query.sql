@@ -1,15 +1,16 @@
--- =================================================================================================
--- Script to create and validate two temporary tables.
--- Expected Outcome: The discrepancy and duplicate detail SELECTs should return zero rows.
--- The final SELECT statement should return two summary rows with row_count = 0, confirming that
--- V_TEMP_TABLE_ORIG and V_TEMP_TABLE_OPT produce identical distinct results and V_TEMP_TABLE_OPT
--- has no duplicate rows.
--- =================================================================================================
--- 1. Stored Procedure Context
--- =================================================================================================
--- START STORED PROCEDURE CONTEXT
--- Auto-generated from 2_sp_details.sql and 3_orig_sp.sql.
--- WARNING: Review the TODO items before relying on this validation script.
+DECLARE freeze_time TIMESTAMP DEFAULT TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR);
+
+
+/* ================================================================================================= */
+/* Script to create and validate two temporary tables. */
+/* Expected Outcome: The discrepancy and duplicate detail SELECTs should return zero rows. */
+/* The final SELECT statement should return two summary rows with row_count = 0, confirming that */
+/* V_TEMP_TABLE_ORIG and V_TEMP_TABLE_OPT produce identical distinct results and V_TEMP_TABLE_OPT */
+/* has no duplicate rows. */
+/* ================================================================================================= */
+/* 1. Stored Procedure Context */
+/* ================================================================================================= */
+/* START STORED PROCEDURE CONTEXT */
 DECLARE
   V_source_system string default 'rswl';
 DECLARE
@@ -125,151 +126,156 @@ SET V_SQL = FORMAT("""
   """, V_source_system);
 
 EXECUTE IMMEDIATE V_SQL;
--- END STORED PROCEDURE CONTEXT
-
--- =================================================================================================
--- 2. Create the Original Temporary Table (V_TEMP_TABLE_ORIG)
--- =================================================================================================
-CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_ORIG AS select * from `MEDIBIS_FACT_CE_temp`;
+/* END STORED PROCEDURE CONTEXT */
+/* ================================================================================================= */
+/* 2. Create the Original Temporary Table (V_TEMP_TABLE_ORIG) */
+/* ================================================================================================= */
+CREATE OR REPLACE TEMPORARY TABLE V_TEMP_TABLE_ORIG AS
 SELECT
-                    A.company_code
-                    ,CAST(A.pers_org_num_org AS STRING) AS faclity_code
-                    ,CAST(G.pers_org_num AS STRING) AS physician_code
-                    ,I.procedure_code
-                    ,cast(B.pers_org_num_pers as string) AS patient_code
-                    ,CAST(CAST(C.key_dos AS DATE) AS DATETIME) AS date_of_service,
-                -- CAST(CONCAT(CONCAT(RIGHT(CONCAT( '0000' ,  LTRIM(RTRIM(IFNULL(CAST(C.tisclient_num AS STRING),'')))),4) ,
-                --     RIGHT(CONCAT( '00000000' ,  LTRIM(RTRIM(IFNULL(CAST(C.pers_org_num_pt AS STRING),'')))),8)),
-                --     CASE WHEN C.case_num IS NULL THEN '00000000' ELSE 
-                --     RIGHT(CONCAT( '00000000' ,  LTRIM(RTRIM(IFNULL(CAST(C.case_num AS STRING),'')))),8)    END)
-                --    AS STRING) AS case_id
-                CONCAT(
-                        LPAD(TRIM(COALESCE(CAST(C.tisclient_num AS STRING), '')), 4, '0'),
-                        LPAD(TRIM(COALESCE(CAST(B.pers_org_num_pers AS STRING), '')), 8, '0'),
-                        LPAD(TRIM(COALESCE(CAST(C.case_num AS STRING), '')), 8, '0')
-                    ) AS case_id
+  *
+FROM `MEDIBIS_FACT_CE_temp`;
 
-                --    cast(C.case_num as string) AS case_id
-            /*,CAST(RIGHT('0000' + LTRIM(RTRIM(CAST(CASE WHEN C.tisclient_num IS NULL THEN '' ELSE C.tisclient_num END AS  string))),4) + 
+SELECT
+  A.company_code,
+  CAST(A.pers_org_num_org AS STRING) AS faclity_code,
+  CAST(G.pers_org_num AS STRING) AS physician_code,
+  I.procedure_code,
+  CAST(B.pers_org_num_pers AS STRING) AS patient_code,
+  CAST(CAST(C.key_dos AS DATE) AS DATETIME) AS date_of_service,
+  CONCAT(
+    LPAD(TRIM(COALESCE(CAST(C.tisclient_num AS STRING), '')), 4, '0'),
+    LPAD(TRIM(COALESCE(CAST(B.pers_org_num_pers AS STRING), '')), 8, '0'),
+    LPAD(TRIM(COALESCE(CAST(C.case_num AS STRING), '')), 8, '0')
+  ) AS case_id, /* CAST(CONCAT(CONCAT(RIGHT(CONCAT( '0000' ,  LTRIM(RTRIM(IFNULL(CAST(C.tisclient_num AS STRING),'')))),4) , */ /*     RIGHT(CONCAT( '00000000' ,  LTRIM(RTRIM(IFNULL(CAST(C.pers_org_num_pt AS STRING),'')))),8)), */ /*     CASE WHEN C.case_num IS NULL THEN '00000000' ELSE */ /*     RIGHT(CONCAT( '00000000' ,  LTRIM(RTRIM(IFNULL(CAST(C.case_num AS STRING),'')))),8)    END) */ /*    AS STRING) AS case_id */ /*    cast(C.case_num as string) AS case_id */ /* ,CAST(RIGHT('0000' + LTRIM(RTRIM(CAST(CASE WHEN C.tisclient_num IS NULL THEN '' ELSE C.tisclient_num END AS  string))),4) + 
              RIGHT('00000000' + LTRIM(RTRIM(CAST(CASE WHEN C.pers_org_num_pt IS NULL THEN '' ELSE C.pers_org_num_pt END as  string))),8) + 
              CASE WHEN C.case_num IS NULL THEN '00000000' ELSE RIGHT('00000000' + LTRIM(RTRIM(CAST(CASE WHEN C.case_num IS NULL THEN '' ELSE C.case_num END AS string))),8) END
              AS string) AS case_id */
-                    ,'O' AS patient_type_code
-                    ,'U' AS visit_type_code
-                    ,1 AS case_count
-                    ,0 AS procedure_count
-                    ,NULL AS financial_year
-                    ,NULL AS financial_period
-                    ,NULL AS bill_period_num
-                    ,CAST(NULL AS DATETIME) billing_period_start_date
-                    ,C.case_num
-            ,C.tisclient_num
-                    ,I.procedure_code AS cpt_procedure_code
-                    ,B.account_num as account_name,
+  'O' AS patient_type_code,
+  'U' AS visit_type_code,
+  1 AS case_count,
+  0 AS procedure_count,
+  NULL AS financial_year,
+  NULL AS financial_period,
+  NULL AS bill_period_num,
+  CAST(NULL AS DATETIME) AS billing_period_start_date,
+  C.case_num,
+  C.tisclient_num,
+  I.procedure_code AS cpt_procedure_code,
+  B.account_num AS account_name,
+  CAST(SUM(F.charge_amount) AS NUMERIC) AS case_charge_amount, /* changed  --sad */
+  CAST(0.00 AS NUMERIC) AS case_primary_payment_amount,
+  CAST(0.00 AS NUMERIC) AS case_copay_payment_amount,
+  CAST(0.00 AS NUMERIC) AS case_writeoff_amount,
+  CAST(I.entity_code AS STRING), /*     ,SUM(F.charge_amount) AS case_charge_amount */ /*     ,0.00 AS case_primary_payment_amount */ /*     ,0.00 AS case_copay_payment_amount */ /*     ,0.00 AS case_writeoff_amount */
+  CAST(CASE WHEN C.refer_phys_num IS NULL THEN -1 ELSE C.refer_phys_num END AS STRING) AS refer_physician_code,
+  CAST(NULL AS INT64) AS acuity_flag,
+  SUM(F.units) AS units,
+  A.source_system_id
+FROM `uspidnaproddata.edw_advantx.vw_ad_tisclient` AS A FOR SYSTEM_TIME AS OF freeze_time
+INNER JOIN `uspidnaproddata.advantx_ods.ad_pt` AS B FOR SYSTEM_TIME AS OF freeze_time
+  ON A.source_system_id = B.source_system_id
+INNER JOIN `uspidnaproddata.advantx_ods.ca_case` AS C FOR SYSTEM_TIME AS OF freeze_time
+  ON B.source_system_id = C.source_system_id
+  AND B.pers_org_num_pers = C.pers_org_num_pt
+LEFT OUTER JOIN `uspidnaproddata.advantx_ods.ca_visit` AS D FOR SYSTEM_TIME AS OF freeze_time
+  ON C.source_system_id = D.source_system_id AND C.case_num = D.case_num
+LEFT OUTER JOIN temp_ca_visit_visitdept_proc_hist AS E
+  ON D.source_system_id = E.source_system_id
+  AND D.case_num = E.case_num
+  AND D.visit_num = E.visit_num
+  AND E.order_key = 1
+LEFT OUTER JOIN (
+  SELECT
+    A.source_system_id,
+    A.case_num,
+    A.visit_num,
+    A.procfee_num,
+    A.charge_amount,
+    C.tis_client_num,
+    CASE WHEN E.quick_code IS NULL THEN '0' ELSE E.quick_code END AS service_code,
+    A.bill_trans_num,
+    A.units
+  FROM ar_billtrans_charge_ce_temp AS A
+  INNER JOIN temp_ar_billtrans AS B
+    ON A.source_system_id = B.source_system_id AND A.bill_trans_num = B.bill_trans_num
+  INNER JOIN `uspidnaproddata.advantx_ods.ar_billing_period` AS C FOR SYSTEM_TIME AS OF freeze_time
+    ON B.source_system_id = C.source_system_id AND B.bill_period_num = C.num
+  LEFT OUTER JOIN `uspidnaproddata.advantx_ods.ut_proc_fee` AS D FOR SYSTEM_TIME AS OF freeze_time
+    ON A.source_system_id = D.source_system_id AND A.procfee_num = D.num
+  LEFT OUTER JOIN `uspidnaproddata.advantx_ods.ut_servicetypes` AS E FOR SYSTEM_TIME AS OF freeze_time
+    ON D.source_system_id = E.source_system_id AND D.service_type_num = E.num
+  WHERE
+    b.active = 1
+) AS F
+  ON C.source_system_id = F.source_system_id
+  AND C.case_num = F.case_num
+  AND CASE WHEN D.visit_num IS NULL THEN -1 ELSE D.visit_num END = CASE WHEN F.visit_num IS NULL THEN -1 ELSE F.visit_num END
+  AND A.pers_org_num_org = F.tis_client_num
+LEFT OUTER JOIN `uspidnaproddata.advantx_ods.ut_phys` AS G FOR SYSTEM_TIME AS OF freeze_time
+  ON C.source_system_id = G.source_system_id AND C.primary_phys_num = G.num
+INNER JOIN (
+  SELECT
+    A.source_system_id,
+    A.case_num,
+    A.procfee_num,
+    A.procedure_code,
+    B.tis_client_num,
+    A.facility_num AS entity_code,
+    A.visit_type_code,
+    ROW_NUMBER() OVER (
+      PARTITION BY A.source_system_id, A.case_num, A.bill_period_num
+      ORDER BY A.procedure_code, A.facility_num
+    ) AS row_num
+  FROM PRIMARY_PROCEDURE_ce_temp AS A
+  INNER JOIN `uspidnaproddata.advantx_ods.ar_billing_period` AS B FOR SYSTEM_TIME AS OF freeze_time
+    ON A.source_system_id = B.source_system_id AND A.bill_period_num = B.num
+) AS I
+  ON F.source_system_id = I.source_system_id
+  AND F.case_num = I.case_num
+  AND I.row_num = 1
+WHERE
+  NOT F.charge_amount IS NULL
+  AND C.key_dos >= (
+    SELECT
+      DATE_TRUNC(DATE_SUB(CURRENT_DATE, INTERVAL '3' YEAR), YEAR) AS datetime_three_years_ago
+  )
+  AND A.source_system_id = V_source_system
+GROUP BY
+  A.company_code,
+  A.pers_org_num_org,
+  G.pers_org_num,
+  I.procedure_code,
+  B.pers_org_num_pers,
+  C.key_dos,
+  CAST(CONCAT(
+    CONCAT(
+      RIGHT(CONCAT('0000', LTRIM(RTRIM(IFNULL(CAST(C.tisclient_num AS STRING), '')))), 4),
+      RIGHT(CONCAT('00000000', LTRIM(RTRIM(IFNULL(CAST(C.pers_org_num_pt AS STRING), '')))), 8)
+    ),
+    CASE
+      WHEN C.case_num IS NULL
+      THEN '00000000'
+      ELSE RIGHT(CONCAT('00000000', LTRIM(RTRIM(IFNULL(CAST(C.case_num AS STRING), '')))), 8)
+    END
+  ) AS STRING),
+  I.visit_type_code,
+  C.case_num,
+  C.tisclient_num,
+  I.procedure_code,
+  B.account_num,
+  I.entity_code,
+  A.source_system_id,
+  C.refer_phys_num /* ,F.units;  */;
 
-                     --changed  --sad
-                    CAST(SUM(F.charge_amount) AS NUMERIC) AS case_charge_amount,
-                CAST(0.00 AS NUMERIC) AS case_primary_payment_amount,
-                CAST(0.00 AS NUMERIC) AS case_copay_payment_amount,
-                CAST(0.00 AS NUMERIC) AS case_writeoff_amount,
+/* ================================================================================================= */
+/* 3. Create the Optimized Temporary Table (V_TEMP_TABLE_OPT) */
+/* ================================================================================================= */
+CREATE OR REPLACE TEMPORARY TABLE V_TEMP_TABLE_OPT AS
+SELECT
+  *
+FROM `MEDIBIS_FACT_CE_temp`;
 
-                --     ,SUM(F.charge_amount) AS case_charge_amount
-                --     ,0.00 AS case_primary_payment_amount 
-                --     ,0.00 AS case_copay_payment_amount
-                --     ,0.00 AS case_writeoff_amount
-                    cast(I.entity_code as string)
-                    ,cast(CASE WHEN C.refer_phys_num is null THEN -1 ELSE C.refer_phys_num END as string) AS refer_physician_code
-                    ,CAST(NULL as int64) AS acuity_flag
-                    ,SUM(F.units) AS units
-                    ,A.source_system_id
-                    FROM `uspidnaproddata.edw_advantx.vw_ad_tisclient`  A INNER JOIN
-                         `uspidnaproddata.advantx_ods.ad_pt` B ON 
-                                A.source_system_id = B.source_system_id INNER JOIN
-                         `uspidnaproddata.advantx_ods.ca_case` C ON 
-                                B.source_system_id = C.source_system_id AND
-                                B.pers_org_num_pers = C.pers_org_num_pt LEFT OUTER JOIN
-                         `uspidnaproddata.advantx_ods.ca_visit` D ON 
-                                C.source_system_id = D.source_system_id AND
-                                C.case_num = D.case_num LEFT OUTER JOIN
-                         temp_ca_visit_visitdept_proc_hist E ON 
-                                D.source_system_id = E.source_system_id AND
-                                D.case_num = E.case_num AND
-                                D.visit_num = E.visit_num AND
-                                E.order_key = 1 LEFT OUTER JOIN
-                         (SELECT A.source_system_id
-                                 ,A.case_num
-                                 ,A.visit_num
-                                 ,A.procfee_num
-                                 ,A.charge_amount
-                                 ,C.tis_client_num
-                                 ,CASE WHEN E.quick_code IS NULL THEN '0' ELSE E.quick_code END AS service_code
-                                 ,A.bill_trans_num
-                                 ,A.units
-                              FROM ar_billtrans_charge_ce_temp A INNER JOIN
-                                   temp_ar_billtrans B ON 
-                                                A.source_system_id = B.source_system_id AND
-                                                A.bill_trans_num = B.bill_trans_num INNER JOIN
-                                    `uspidnaproddata.advantx_ods.ar_billing_period` C ON 
-                                                B.source_system_id = C.source_system_id AND
-                                                B.bill_period_num = C.num   LEFT OUTER JOIN
-                                    `uspidnaproddata.advantx_ods.ut_proc_fee` D ON 
-                                                A.source_system_id = D.source_system_id AND
-                                                A.procfee_num = D.num LEFT OUTER JOIN
-                                    `uspidnaproddata.advantx_ods.ut_servicetypes` E ON 
-                                                D.source_system_id = E.source_system_id AND
-                                                D.service_type_num = E.num 
-                                    WHERE  b.active = 1) F ON C.source_system_id = F.source_system_id AND
-                                                             C.case_num = F.case_num AND
-                                                             CASE WHEN D.visit_num IS NULL THEN -1 ELSE D.visit_num END = CASE WHEN F.visit_num IS NULL THEN -1 ELSE F.visit_num END AND
-                                                             A.pers_org_num_org = F.tis_client_num LEFT OUTER JOIN
-                         `uspidnaproddata.advantx_ods.ut_phys`  G ON C.source_system_id = G.source_system_id AND
-                                                   C.primary_phys_num = G.num INNER JOIN
-                         (SELECT 
-                            A.source_system_id
-                            ,A.case_num
-                            ,A.procfee_num
-                            ,A.procedure_code
-                            ,B.tis_client_num
-                            ,A.facility_num AS entity_code
-                            ,A.visit_type_code, 
-                            ROW_NUMBER() OVER (PARTITION BY A.source_system_id,  A.case_num,A.bill_period_num 
-                            ORDER BY A.procedure_code,A.facility_num ) AS row_num
-                            FROM PRIMARY_PROCEDURE_ce_temp A INNER JOIN
-                                  `uspidnaproddata.advantx_ods.ar_billing_period` B ON A.source_system_id = B.source_system_id AND
-                                                                     A.bill_period_num = B.num) I ON 
-                                                                     F.source_system_id = I.source_system_id AND
-                                                                     F.case_num = I.case_num 
-                                                                     and I.row_num =1
-                       WHERE   F.charge_amount IS NOT NULL  and   C.key_dos >=     (SELECT DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 YEAR), YEAR) 
-    AS datetime_three_years_ago) AND A.source_system_id=V_source_system
-                           GROUP BY A.company_code
-                                   ,A.pers_org_num_org 
-                                   ,G.pers_org_num 
-                                   ,I.procedure_code
-                                   ,B.pers_org_num_pers 
-                                   ,C.key_dos
-                                   ,CAST(CONCAT(CONCAT(RIGHT(CONCAT( '0000' ,  LTRIM(RTRIM(IFNULL(CAST(C.tisclient_num AS STRING),'')))),4) ,
-                                   RIGHT(CONCAT( '00000000' ,  LTRIM(RTRIM(IFNULL(CAST(C.pers_org_num_pt AS STRING),'')))),8)),
-                                   CASE WHEN C.case_num IS NULL THEN '00000000' ELSE 
-                                   RIGHT(CONCAT( '00000000' ,  LTRIM(RTRIM(IFNULL(CAST(C.case_num AS STRING),'')))),8)    END)
-                                   AS STRING) 
-                                   ,I.visit_type_code
-                                   ,C.case_num
-                   ,C.tisclient_num
-                                   ,I.procedure_code
-                                   ,B.account_num
-                                   ,I.entity_code
-                                   ,A.source_system_id
-                                   ,C.refer_phys_num
-                                   --,F.units;  
-                                   ; 
--- =================================================================================================
--- 3. Create the Optimized Temporary Table (V_TEMP_TABLE_OPT)
--- =================================================================================================
-CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_OPT AS select * from `MEDIBIS_FACT_CE_temp`;
-WITH
--- CTE for subquery 'F' to gather charge details.
-subquery_F AS (
+WITH subquery_F /* CTE for subquery 'F' to gather charge details. */ AS (
   SELECT
     A.source_system_id,
     A.case_num,
@@ -281,13 +287,11 @@ subquery_F AS (
   FROM ar_billtrans_charge_ce_temp AS A
   INNER JOIN temp_ar_billtrans AS B
     ON A.source_system_id = B.source_system_id AND A.bill_trans_num = B.bill_trans_num
-  INNER JOIN `uspidnaproddata.advantx_ods.ar_billing_period` AS C
+  INNER JOIN `uspidnaproddata.advantx_ods.ar_billing_period` AS C FOR SYSTEM_TIME AS OF freeze_time
     ON B.source_system_id = C.source_system_id AND B.bill_period_num = C.num
-  WHERE B.active = 1
-),
-
--- CTE for subquery 'I' to identify the primary procedure, filtering to row_num=1.
-subquery_I AS (
+  WHERE
+    B.active = 1
+), subquery_I /* CTE for subquery 'I' to identify the primary procedure, filtering to row_num=1. */ AS (
   SELECT
     A.source_system_id,
     A.case_num,
@@ -305,156 +309,178 @@ subquery_I AS (
       bill_period_num,
       facility_num AS entity_code,
       visit_type_code,
-      ROW_NUMBER() OVER (PARTITION BY source_system_id, case_num, bill_period_num ORDER BY procedure_code, facility_num) AS row_num
+      ROW_NUMBER() OVER (
+        PARTITION BY source_system_id, case_num, bill_period_num
+        ORDER BY procedure_code, facility_num
+      ) AS row_num
     FROM PRIMARY_PROCEDURE_ce_temp
   ) AS A
-  INNER JOIN `uspidnaproddata.advantx_ods.ar_billing_period` AS B
+  INNER JOIN `uspidnaproddata.advantx_ods.ar_billing_period` AS B FOR SYSTEM_TIME AS OF freeze_time
     ON A.source_system_id = B.source_system_id AND A.bill_period_num = B.num
-  WHERE A.row_num = 1
-),
-
--- CTE to pre-calculate the expensive 'generated_case_id' ONCE.
-cases_with_id AS (
-    SELECT
-        source_system_id,
-        case_num,
-        pers_org_num_pt,
-        tisclient_num,
-        key_dos,
-        refer_phys_num,
-        primary_phys_num,
-        CAST(
-            CONCAT(
-                RIGHT(CONCAT('0000', LTRIM(RTRIM(IFNULL(CAST(tisclient_num AS STRING), '')))), 4),
-                RIGHT(CONCAT('00000000', LTRIM(RTRIM(IFNULL(CAST(pers_org_num_pt AS STRING), '')))), 8),
-                CASE
-                    WHEN case_num IS NULL THEN '00000000'
-                    ELSE RIGHT(CONCAT('00000000', LTRIM(RTRIM(IFNULL(CAST(case_num AS STRING), '')))), 8)
-                END
-            ) AS STRING
-        ) AS generated_case_id
-    FROM `uspidnaproddata.advantx_ods.ca_case`
+  WHERE
+    A.row_num = 1
+), cases_with_id /* CTE to pre-calculate the expensive 'generated_case_id' ONCE. */ AS (
+  SELECT
+    source_system_id,
+    case_num,
+    pers_org_num_pt,
+    tisclient_num,
+    key_dos,
+    refer_phys_num,
+    primary_phys_num,
+    CAST(CONCAT(
+      RIGHT(CONCAT('0000', LTRIM(RTRIM(IFNULL(CAST(tisclient_num AS STRING), '')))), 4),
+      RIGHT(CONCAT('00000000', LTRIM(RTRIM(IFNULL(CAST(pers_org_num_pt AS STRING), '')))), 8),
+      CASE
+        WHEN case_num IS NULL
+        THEN '00000000'
+        ELSE RIGHT(CONCAT('00000000', LTRIM(RTRIM(IFNULL(CAST(case_num AS STRING), '')))), 8)
+      END
+    ) AS STRING) AS generated_case_id
+  FROM `uspidnaproddata.advantx_ods.ca_case` FOR SYSTEM_TIME AS OF freeze_time
 )
 SELECT
-    A.company_code,
-    CAST(A.pers_org_num_org AS STRING) AS faclity_code, -- Note: Preserving original 'faclity_code' typo
-    CAST(G.pers_org_num AS STRING) AS physician_code,
-    I.procedure_code,
-    CAST(B.pers_org_num_pers AS STRING) AS patient_code,
-    CAST(C.key_dos AS DATETIME) AS date_of_service,
-    C.generated_case_id AS case_id,
-    'O' AS patient_type_code,
-    'U' AS visit_type_code,
-    1 AS case_count,
-    0 AS procedure_count,
-    NULL AS financial_year,
-    NULL AS financial_period,
-    NULL AS bill_period_num,
-    CAST(NULL AS DATETIME) AS billing_period_start_date,
-    C.case_num,
-    C.tisclient_num,
-    I.procedure_code AS cpt_procedure_code,
-    B.account_num AS account_name,
-    CAST(SUM(F.charge_amount) AS NUMERIC) AS case_charge_amount,
-    CAST(0.00 AS NUMERIC) AS case_primary_payment_amount,
-    CAST(0.00 AS NUMERIC) AS case_copay_payment_amount,
-    CAST(0.00 AS NUMERIC) AS case_writeoff_amount,
-    CAST(I.entity_code AS STRING),
-    CAST(IFNULL(C.refer_phys_num, -1) AS STRING) AS refer_physician_code,
-    CAST(NULL AS INT64) AS acuity_flag,
-    SUM(F.units) AS units,
-    A.source_system_id
-FROM `uspidnaproddata.edw_advantx.vw_ad_tisclient` AS A
-INNER JOIN `uspidnaproddata.advantx_ods.ad_pt` AS B
-    ON A.source_system_id = B.source_system_id
-INNER JOIN cases_with_id AS C -- Using the CTE with pre-computed case_id
-    ON B.source_system_id = C.source_system_id AND B.pers_org_num_pers = C.pers_org_num_pt
-LEFT JOIN `uspidnaproddata.advantx_ods.ca_visit` AS D
-    ON C.source_system_id = D.source_system_id AND C.case_num = D.case_num
+  A.company_code,
+  CAST(A.pers_org_num_org AS STRING) AS faclity_code, /* Note: Preserving original 'faclity_code' typo */
+  CAST(G.pers_org_num AS STRING) AS physician_code,
+  I.procedure_code,
+  CAST(B.pers_org_num_pers AS STRING) AS patient_code,
+  CAST(C.key_dos AS DATETIME) AS date_of_service,
+  C.generated_case_id AS case_id,
+  'O' AS patient_type_code,
+  'U' AS visit_type_code,
+  1 AS case_count,
+  0 AS procedure_count,
+  NULL AS financial_year,
+  NULL AS financial_period,
+  NULL AS bill_period_num,
+  CAST(NULL AS DATETIME) AS billing_period_start_date,
+  C.case_num,
+  C.tisclient_num,
+  I.procedure_code AS cpt_procedure_code,
+  B.account_num AS account_name,
+  CAST(SUM(F.charge_amount) AS NUMERIC) AS case_charge_amount,
+  CAST(0.00 AS NUMERIC) AS case_primary_payment_amount,
+  CAST(0.00 AS NUMERIC) AS case_copay_payment_amount,
+  CAST(0.00 AS NUMERIC) AS case_writeoff_amount,
+  CAST(I.entity_code AS STRING),
+  CAST(IFNULL(C.refer_phys_num, -1) AS STRING) AS refer_physician_code,
+  CAST(NULL AS INT64) AS acuity_flag,
+  SUM(F.units) AS units,
+  A.source_system_id
+FROM `uspidnaproddata.edw_advantx.vw_ad_tisclient` AS A FOR SYSTEM_TIME AS OF freeze_time
+INNER JOIN `uspidnaproddata.advantx_ods.ad_pt` AS B FOR SYSTEM_TIME AS OF freeze_time
+  ON A.source_system_id = B.source_system_id
+INNER JOIN cases_with_id AS C /* Using the CTE with pre-computed case_id */
+  ON B.source_system_id = C.source_system_id
+  AND B.pers_org_num_pers = C.pers_org_num_pt
+LEFT JOIN `uspidnaproddata.advantx_ods.ca_visit` AS D FOR SYSTEM_TIME AS OF freeze_time
+  ON C.source_system_id = D.source_system_id AND C.case_num = D.case_num
 LEFT JOIN temp_ca_visit_visitdept_proc_hist AS E
-    ON D.source_system_id = E.source_system_id
-    AND D.case_num = E.case_num
-    AND D.visit_num = E.visit_num
-    AND E.order_key = 1
--- This is now an INNER JOIN because of the WHERE clause on F.charge_amount
+  ON D.source_system_id = E.source_system_id
+  AND D.case_num = E.case_num
+  AND D.visit_num = E.visit_num
+  AND E.order_key = 1
+/* This is now an INNER JOIN because of the WHERE clause on F.charge_amount */
 INNER JOIN subquery_F AS F
-    ON C.source_system_id = F.source_system_id
-    AND C.case_num = F.case_num
-    AND IFNULL(D.visit_num, -1) = IFNULL(F.visit_num, -1) -- Simplified, but still expensive. Main gain is elsewhere.
-    AND A.pers_org_num_org = F.tis_client_num
-LEFT JOIN `uspidnaproddata.advantx_ods.ut_phys` AS G
-    ON C.source_system_id = G.source_system_id AND C.primary_phys_num = G.num
+  ON C.source_system_id = F.source_system_id
+  AND C.case_num = F.case_num
+  AND IFNULL(D.visit_num, -1) = IFNULL(F.visit_num, -1) /* Simplified, but still expensive. Main gain is elsewhere. */
+  AND A.pers_org_num_org = F.tis_client_num
+LEFT JOIN `uspidnaproddata.advantx_ods.ut_phys` AS G FOR SYSTEM_TIME AS OF freeze_time
+  ON C.source_system_id = G.source_system_id AND C.primary_phys_num = G.num
 INNER JOIN subquery_I AS I
-    ON F.source_system_id = I.source_system_id AND F.case_num = I.case_num
+  ON F.source_system_id = I.source_system_id AND F.case_num = I.case_num
 WHERE
-    F.charge_amount IS NOT NULL
-    AND C.key_dos >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 YEAR), YEAR)
-    -- The execution plan indicates 'rswl' was used for V_source_system.
-    -- Replace 'rswl' with the appropriate variable if this query is part of a script.
-    AND A.source_system_id = 'rswl' -- = V_source_system
+  NOT F.charge_amount IS NULL
+  AND C.key_dos >= DATE_TRUNC(DATE_SUB(CURRENT_DATE, INTERVAL '3' YEAR), YEAR)
+  AND /* The execution plan indicates 'rswl' was used for V_source_system. */ /* Replace 'rswl' with the appropriate variable if this query is part of a script. */ A.source_system_id = 'rswl' /* = V_source_system */
 GROUP BY
-    A.company_code,
-    A.pers_org_num_org,
-    G.pers_org_num,
-    I.procedure_code,
-    B.pers_org_num_pers,
-    C.key_dos,
-    C.generated_case_id, -- Grouping by the simple, pre-computed column
-    I.visit_type_code,
-    C.case_num,
-    C.tisclient_num,
-    B.account_num,
-    I.entity_code,
-    A.source_system_id,
-    C.refer_phys_num;
+  A.company_code,
+  A.pers_org_num_org,
+  G.pers_org_num,
+  I.procedure_code,
+  B.pers_org_num_pers,
+  C.key_dos,
+  C.generated_case_id, /* Grouping by the simple, pre-computed column */
+  I.visit_type_code,
+  C.case_num,
+  C.tisclient_num,
+  B.account_num,
+  I.entity_code,
+  A.source_system_id,
+  C.refer_phys_num;
 
--- =================================================================================================
--- 4. Validation Step: Compare the two tables and check optimized duplicates.
--- DISCREPANCY counts distinct rows that appear in one table but not the other.
--- DUPLICATE ROWS counts extra copies of duplicate rows in V_TEMP_TABLE_OPT.
--- The first two SELECT statements show the actual rows when discrepancies or duplicates exist.
--- The final SELECT statement shows only the summary counts.
--- =================================================================================================
-CREATE OR REPLACE TEMP TABLE V_VALIDATION_DISCREPANCIES AS
-(SELECT 'ONLY IN ORIGINAL' AS validation_diff_type, *
- FROM V_TEMP_TABLE_ORIG
- EXCEPT DISTINCT
- SELECT 'ONLY IN ORIGINAL' AS validation_diff_type, *
- FROM V_TEMP_TABLE_OPT
+/* ================================================================================================= */
+/* 4. Validation Step: Compare the two tables and check optimized duplicates. */
+/* DISCREPANCY counts distinct rows that appear in one table but not the other. */
+/* DUPLICATE ROWS counts extra copies of duplicate rows in V_TEMP_TABLE_OPT. */
+/* The first two SELECT statements show the actual rows when discrepancies or duplicates exist. */
+/* The final SELECT statement shows only the summary counts. */
+/* ================================================================================================= */
+CREATE OR REPLACE TEMPORARY TABLE V_VALIDATION_DISCREPANCIES AS
+(
+  SELECT
+    'ONLY IN ORIGINAL' AS validation_diff_type,
+    *
+  FROM V_TEMP_TABLE_ORIG
+  EXCEPT DISTINCT
+  SELECT
+    'ONLY IN ORIGINAL' AS validation_diff_type,
+    *
+  FROM V_TEMP_TABLE_OPT
 )
 UNION ALL
-(SELECT 'ONLY IN OPTIMIZED' AS validation_diff_type, *
- FROM V_TEMP_TABLE_OPT
- EXCEPT DISTINCT
- SELECT 'ONLY IN OPTIMIZED' AS validation_diff_type, *
- FROM V_TEMP_TABLE_ORIG
+(
+  SELECT
+    'ONLY IN OPTIMIZED' AS validation_diff_type,
+    *
+  FROM V_TEMP_TABLE_OPT
+  EXCEPT DISTINCT
+  SELECT
+    'ONLY IN OPTIMIZED' AS validation_diff_type,
+    *
+  FROM V_TEMP_TABLE_ORIG
 );
 
-CREATE OR REPLACE TEMP TABLE V_VALIDATION_OPT_DUPLICATES AS
-SELECT duplicate_row.*
+CREATE OR REPLACE TEMPORARY TABLE V_VALIDATION_OPT_DUPLICATES AS
+SELECT
+  duplicate_row.*
 FROM (
-  SELECT ANY_VALUE(opt) AS duplicate_row
+  SELECT
+    ANY_VALUE(opt) AS duplicate_row
   FROM V_TEMP_TABLE_OPT AS opt
-  GROUP BY TO_JSON_STRING(opt)
-  HAVING COUNT(*) > 1
+  GROUP BY
+    TO_JSON_STRING(opt)
+  HAVING
+    COUNT(*) > 1
 );
 
--- View discrepancy rows.
-SELECT *
+/* View discrepancy rows. */
+SELECT
+  *
 FROM V_VALIDATION_DISCREPANCIES;
 
--- View duplicate rows from the optimized query.
-SELECT *
+/* View duplicate rows from the optimized query. */
+SELECT
+  *
 FROM V_VALIDATION_OPT_DUPLICATES;
 
--- View summary counts.
-SELECT 'DISCREPANCY' AS validation_check, COUNT(*) AS row_count
+/* View summary counts. */
+SELECT
+  'DISCREPANCY' AS validation_check,
+  COUNT(*) AS row_count
 FROM V_VALIDATION_DISCREPANCIES
 UNION ALL
-SELECT 'DUPLICATE ROWS' AS validation_check, COALESCE(SUM(row_count - 1), 0) AS row_count
+SELECT
+  'DUPLICATE ROWS' AS validation_check,
+  COALESCE(SUM(row_count - 1), 0) AS row_count
 FROM (
-  SELECT COUNT(*) AS row_count
+  SELECT
+    COUNT(*) AS row_count
   FROM V_TEMP_TABLE_OPT AS opt
-  GROUP BY TO_JSON_STRING(opt)
-  HAVING COUNT(*) > 1
+  GROUP BY
+    TO_JSON_STRING(opt)
+  HAVING
+    COUNT(*) > 1
 );
