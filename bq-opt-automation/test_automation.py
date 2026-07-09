@@ -2927,42 +2927,41 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(normalize_newlines(text), encoding="utf-8", newline="\n")
     
 def fetch_jobs_by_owner(csv_path: str, target_owner: str) -> List[dict]:
-    """Fetch deliverables from the CSV based on owner_name AND status."""
+    """Fetch deliverables from the CSV based on 'owner' AND 'Status'."""
     jobs = []
     target_status = "in progress"
     
     with open(csv_path, mode='r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
-        for row in reader:
-            # Get the values and clean them up for safe comparison
+        # enumerate(..., start=2) tracks the actual Excel/CSV row number
+        for row_num, row in enumerate(reader, start=2):
             owner = row.get('owner', '').strip().lower()
             status = row.get('Status', '').strip().lower()
             
-            # Check if BOTH conditions are met
             if owner == target_owner.lower() and status == target_status:
-                jobs.append(row)
+                # Store the entire row dictionary and inject our row number
+                job_data = dict(row)
+                job_data['csv_row_number'] = row_num
+                jobs.append(job_data)
                 
     return jobs
 
 def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids: List[str], progress: Progress, task_id: int) -> Dict[str, str]:
     """Handles artifact generation for a single job ID."""
     
-    # Mapped exactly to your CSV column headers
     job_id = row.get('job_id', '').strip()
     progress.update(task_id, description=f"[cyan]Processing {job_id} - Initializing...")
     
     try:
         item = ConfigItem(
-            entity=row.get('Entity', '').strip(),            
+            entity=row.get('Entity', '').strip(), 
             metric_name=row.get('metric_name', '').strip(), 
             parent_job_id=row.get('parent_job_id', '').strip(),
             job_id=job_id
         )
         
-        # Clone args for thread safety so workers don't overwrite each other
         local_args = copy.copy(base_args)
         
-        # Check if this specific job ID was flagged for a forced rerun
         if job_id in force_rerun_ids:
             local_args.rerun_job_id = job_id  
             progress.update(task_id, description=f"[yellow]Processing {job_id} - FORCING NEW WORKFLOW...")
@@ -2970,13 +2969,34 @@ def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids
             local_args.rerun_job_id = None
             progress.update(task_id, description=f"[blue]Processing {job_id} - Fetching/Generating Artifacts...")
             
-        # Instantiate and run your existing automation class
         automation = ArtifactAutomation(local_args)
         automation.process_item(item)
         
+        # --- GENERATE DOCUMENTATION ARTIFACT ---
+        attempt_number = automation.resolve_attempt_number(item)
+        job_dir = item.job_root / f"attempt_{attempt_number}"
+        
+        doc_file = job_dir / "0_documentation.md"
+        doc_content = (
+            f"# Job Documentation: {job_id}\n\n"
+            f"- **CSV Row Number:** {row.get('csv_row_number')}\n"
+            f"- **Owner:** {row.get('owner', 'N/A')}\n"
+            f"- **Status:** {row.get('Status', 'N/A')}\n"
+            f"- **Entity:** {row.get('Entity', 'N/A')}\n"
+            f"- **Job ID:** {job_id}\n"
+            f"- **Parent Job ID:** {row.get('parent_job_id', 'N/A')}\n"
+            f"- **SP Name:** {row.get('SP_Name', 'N/A')}\n"
+            f"- **Frequency:** {row.get('frequency', 'N/A')}\n\n"
+            f"## Notes\n{row.get('notes', 'None provided.')}\n\n"
+            f"## Comments\n{row.get('comments', 'None provided.')}\n"
+            f"## Error Message\n{row.get('error_message', 'None provided.')}\n"
+        )
+        # Write the file directly into the artifact folder
+        doc_file.write_text(doc_content, encoding="utf-8")
+        # --------------------------------------------
+        
         progress.update(task_id, description=f"[green]Completed {job_id}", completed=100)
         
-        # Determine status message based on whether it was a forced rerun
         status_msg = "SUCCESS: Forced new workflow execution." if job_id in force_rerun_ids else "SUCCESS: Artifacts built and fetched."
         return {"job_id": job_id, "status": status_msg}
 
