@@ -6,3 +6,4 @@ snapshot_optimized_dvt.sql
 snapshot.py
 *.html
 *.csv
+*.txt
