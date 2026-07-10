@@ -3,6 +3,10 @@
 This script copies the local SQL templates, fetches the matching BigQuery
 metadata, optionally triggers the optimization workflow once, and writes the
 numbered files used by the Conifer review folders.
+
+Updated by: Ajman Mocsana
+Additional Features: Added a documentation on the generated artifacts
+Concurrently fetches the artifacts of multiple job IDs marked as "In Progress" inside the config.csv
 """
 
 from __future__ import annotations
