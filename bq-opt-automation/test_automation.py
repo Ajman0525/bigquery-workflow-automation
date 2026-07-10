@@ -3014,7 +3014,7 @@ def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids
         progress.update(task_id, description=f"[red]Failed {job_id}", completed=100)
         return {"job_id": job_id, "status": f"ERROR: {str(e)}"}
 
-def run_concurrent_batch(csv_path: str, owner: str, args: argparse.Namespace, force_rerun_ids: List[str], max_workers: int = 5, preview_only: bool = False, target_status: str = "In Progress"):
+def run_concurrent_batch(csv_path: str, owner: str, args: argparse.Namespace, force_rerun_ids: List[str], max_workers: int = 5, preview_only: bool = False, target_status: str = "In Progress", ):
     """Orchestrates the concurrent execution and CLI dashboard."""
     target_jobs = fetch_jobs_by_owner(csv_path, owner, target_status)
     
@@ -3096,6 +3096,7 @@ if __name__ == "__main__":
     custom_parser.add_argument("--owner", type=str, default="Ajman", help="Target owner name (Defaults to 'Ajman')")
     custom_parser.add_argument("--status", type=str, default="In Progress", help="Target csv status (Defaults to 'In Progress')")
     custom_parser.add_argument("--csv", type=str, default="config.csv", help="Path to your target CSV file")
+    custom_parser.add_argument("--max-workers", type=int, default=5, help="Number of threads to concurrently run")
     custom_parser.add_argument("--preview", action="store_true", help="Print a table of jobs to be executed without actually running them")
     
     custom_args, remaining_argv = custom_parser.parse_known_args(sys.argv[1:])
@@ -3112,7 +3113,7 @@ if __name__ == "__main__":
             owner=custom_args.owner, 
             args=args,
             force_rerun_ids=force_ids_list,
-            max_workers=5,
+            max_workers=custom_args.max_workers,
             preview_only=custom_args.preview, 
             target_status=custom_args.status
         )
