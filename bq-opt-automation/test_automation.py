@@ -3014,7 +3014,7 @@ def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids
         progress.update(task_id, description=f"[red]Failed {job_id}", completed=100)
         return {"job_id": job_id, "status": f"ERROR: {str(e)}"}
 
-def run_concurrent_batch(csv_path: str, owner: str, args: argparse.Namespace, force_rerun_ids: List[str], max_workers: int = 5, preview_only: bool = False, target_status: str = "In Progress", ):
+def run_concurrent_batch(csv_path: str, owner: str, args: argparse.Namespace, force_rerun_ids: List[str], max_workers: int = 5, preview_only: bool = False, target_status: str = "In Progress", force_rerun_all: bool = False):
     """Orchestrates the concurrent execution and CLI dashboard."""
     target_jobs = fetch_jobs_by_owner(csv_path, owner, target_status)
     
@@ -3022,6 +3022,9 @@ def run_concurrent_batch(csv_path: str, owner: str, args: argparse.Namespace, fo
         console.print(f"[bold red]No jobs found for owner: '{owner}' with status '{target_status}' [/bold red]")
         return
     
+    if force_rerun_all:
+        force_rerun_ids = [row.get('job_id') for row in target_jobs if row.get('job_id')]
+
     if preview_only:
         console.print(f"\n[bold cyan]🔍 PREVIEW MODE: Found {len(target_jobs)} jobs. No actions will be taken.[/bold cyan]")
         table = Table(show_header=True, header_style="bold magenta")
@@ -3093,6 +3096,7 @@ if __name__ == "__main__":
     custom_parser.add_argument("--force-rerun-ids", type=str, default="", help="Comma-separated list of job IDs to force rerun")
     
     # ADDITIONAL ARGUMENTS
+    custom_parser.add_argument("--force-rerun-all", action="store_true", help="Force a brand new workflow execution for ALL fetched jobs")
     custom_parser.add_argument("--owner", type=str, default="Ajman", help="Target owner name (Defaults to 'Ajman')")
     custom_parser.add_argument("--status", type=str, default="In Progress", help="Target csv status (Defaults to 'In Progress')")
     custom_parser.add_argument("--csv", type=str, default="config.csv", help="Path to your target CSV file")
@@ -3115,7 +3119,8 @@ if __name__ == "__main__":
             force_rerun_ids=force_ids_list,
             max_workers=custom_args.max_workers,
             preview_only=custom_args.preview, 
-            target_status=custom_args.status
+            target_status=custom_args.status,
+            force_rerun_all=custom_args.force_rerun_all
         )
     except Exception as e:
         console.print(f"[bold red]Execution halted: {e}[/bold red]")
