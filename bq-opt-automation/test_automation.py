@@ -2957,6 +2957,9 @@ def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids
     
     job_id = row.get('job_id', '').strip()
     progress.update(task_id, description=f"[cyan]Processing {job_id} - Initializing...")
+
+    automation = None
+    item = None
     
     try:
         item = ConfigItem(
@@ -2977,42 +2980,43 @@ def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids
             
         automation = ArtifactAutomation(local_args)
         
-        # --- GENERATE DOCUMENTATION FIRST ---
-        attempt_number = automation.resolve_attempt_number(item)
-        job_dir = item.job_root / f"attempt_{attempt_number}"
-        
-        # Create the directory structure manually first so we can write the doc
-        job_dir.mkdir(parents=True, exist_ok=True)
-        
-        doc_file = job_dir / "0_documentation.md"
-        doc_content = (
-            f"# Job Documentation: {job_id}\n\n"
-            f"- **CSV Row Number:** {row.get('csv_row_number')}\n"
-            f"- **Owner:** {row.get('owner', 'N/A')}\n"
-            f"- **Status:** {row.get('Status', 'N/A')}\n"
-            f"- **Entity:** {row.get('Entity', 'N/A')}\n"
-            f"- **Job ID:** {job_id}\n"
-            f"- **Parent Job ID:** {row.get('parent_job_id', 'N/A')}\n"
-            f"- **SP Name:** {row.get('SP_Name', 'N/A')}\n"
-            f"- **Frequency:** {row.get('frequency', 'N/A')}\n\n"
-            f"## Notes\n{row.get('notes', 'None provided.')}\n\n"
-            f"## Comments\n{row.get('comments', 'None provided.')}\n\n"
-            f"## Error Message\n{row.get('error_message', 'None provided.')}\n"
-        )
-        doc_file.write_text(doc_content, encoding="utf-8")
-        # ----------------------------------------------
-
-        # Now execute the heavy BigQuery operations
         automation.process_item(item)
         
         progress.update(task_id, description=f"[green]Completed {job_id}", completed=100)
-        
         status_msg = "SUCCESS: Forced new workflow execution." if job_id in force_rerun_ids else "SUCCESS: Artifacts built and fetched."
         return {"job_id": job_id, "status": status_msg}
 
     except Exception as e:
         progress.update(task_id, description=f"[red]Failed {job_id}", completed=100)
         return {"job_id": job_id, "status": f"ERROR: {str(e)}"}
+        
+    finally:
+        if automation and item:
+            try:
+                attempt_number = automation.resolve_attempt_number(item)
+                job_dir = item.job_root / f"attempt_{attempt_number}"
+                
+                # Ensure the directory exists (in case the script failed before creating it)
+                job_dir.mkdir(parents=True, exist_ok=True)
+                
+                doc_file = job_dir / "0_documentation.md"
+                doc_content = (
+                    f"# Job Documentation: {job_id}\n\n"
+                    f"- **CSV Row Number:** {row.get('csv_row_number')}\n"
+                    f"- **Owner:** {row.get('owner', 'N/A')}\n"
+                    f"- **Status:** {row.get('Status', 'N/A')}\n"
+                    f"- **Entity:** {row.get('Entity', 'N/A')}\n"
+                    f"- **Job ID:** {job_id}\n"
+                    f"- **Parent Job ID:** {row.get('parent_job_id', 'N/A')}\n"
+                    f"- **SP Name:** {row.get('SP_Name', 'N/A')}\n"
+                    f"- **Frequency:** {row.get('frequency', 'N/A')}\n\n"
+                    f"## Notes\n{row.get('notes', 'None provided.')}\n\n"
+                    f"## Comments\n{row.get('comments', 'None provided.')}\n"
+                )
+                doc_file.write_text(doc_content, encoding="utf-8")
+            except Exception:
+                pass
+
 
 def run_concurrent_batch(csv_path: str, owner: str, args: argparse.Namespace, force_rerun_ids: List[str], max_workers: int = 5, preview_only: bool = False, target_status: str = "In Progress", force_rerun_all: bool = False):
     """Orchestrates the concurrent execution and CLI dashboard."""
