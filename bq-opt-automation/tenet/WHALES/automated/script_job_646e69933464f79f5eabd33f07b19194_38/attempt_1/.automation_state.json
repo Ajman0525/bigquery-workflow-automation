@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "config": {
+    "entity": "Tenet",
+    "metric_name": "WHALES",
+    "parent_job_id": "8c118861-1ae3-439b-b270-2a0af61dd182",
+    "job_id": "script_job_646e69933464f79f5eabd33f07b19194_38",
+    "status_folder": "automated"
+  },
+  "attempt_number": 1,
+  "mode": "normal",
+  "completed_steps": [
+    "template",
+    "queries"
+  ],
+  "workflow_triggered": false,
+  "created_at": "2026-07-14T22:48:26",
+  "updated_at": "2026-07-14T22:48:26"
+}
