@@ -1,4 +1,26 @@
-CREATE PROCEDURE thcdnaproddata.aci.sp_ade_report_lab_ade_types(OUT OUT_PARAM INT64)
+-- Job ID: script_job_646e69933464f79f5eabd33f07b19194_38
+
+-- ---------------------------------------------------------------------------
+-- Test stored procedure script.
+-- Creates scratch objects in thcdnadevdata.staging,
+-- invokes the optimized test SP, and drops those objects at the end.
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- 1. Create scratch tables and optimized test stored procedure.
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- Test scaffolding only.
+-- The tables below are created in thcdnadevdata.staging
+-- as prerequisites for manually testing the optimized SP.
+-- They are not part of the stored procedure definition and are dropped in
+-- the cleanup block at the end of the combined test script.
+-- ---------------------------------------------------------------------------
+
+-- No prod DML targets were detected.
+
+CREATE OR REPLACE PROCEDURE thcdnadevdata.staging.opt_sp_ade_report_lab_ade_types(OUT OUT_PARAM INT64)
 BEGIN
 
 -- declare OUT_PARAM BOOL;
@@ -898,3 +920,19 @@ RETURN ;
 
 END;
 END;
+
+-- ---------------------------------------------------------------------------
+-- 2. Invoke optimized test stored procedure.
+-- ---------------------------------------------------------------------------
+
+BEGIN
+  DECLARE OUT_PARAM INT64 DEFAULT NULL;
+  CALL thcdnadevdata.staging.opt_sp_ade_report_lab_ade_types(OUT_PARAM);
+  SELECT OUT_PARAM AS out_status;
+END;
+
+-- ---------------------------------------------------------------------------
+-- 3. Cleanup scratch tables and optimized test stored procedure.
+-- ---------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS thcdnadevdata.staging.opt_sp_ade_report_lab_ade_types;

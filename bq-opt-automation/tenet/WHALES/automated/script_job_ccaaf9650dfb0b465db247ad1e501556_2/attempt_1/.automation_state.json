@@ -11,9 +11,21 @@
   "mode": "normal",
   "completed_steps": [
     "template",
-    "queries"
+    "queries",
+    "sp_details",
+    "orig_sp",
+    "orig_query",
+    "optimized_query",
+    "exec_query",
+    "exec_details",
+    "opt_sp",
+    "update_results",
+    "test_sp"
   ],
   "workflow_triggered": false,
   "created_at": "2026-07-14T22:48:26",
-  "updated_at": "2026-07-14T22:48:27"
+  "updated_at": "2026-07-14T22:49:32",
+  "optimized_result": {
+    "created_at": "2026-06-29T05:59:01.242402"
+  }
 }

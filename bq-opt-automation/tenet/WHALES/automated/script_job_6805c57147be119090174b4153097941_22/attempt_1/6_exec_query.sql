@@ -7,19 +7,92 @@
 -- =================================================================================================
 -- 1. Stored Procedure Context
 -- =================================================================================================
--- INSERT STORED PROCEDURE CONTEXT HERE
+-- START STORED PROCEDURE CONTEXT
+-- Auto-generated from 2_sp_details.sql and 3_orig_sp.sql.
+-- No stored procedure context dependencies were detected.
+-- END STORED PROCEDURE CONTEXT
 
 -- =================================================================================================
 -- 2. Create the Original Temporary Table (V_TEMP_TABLE_ORIG)
 -- =================================================================================================
---CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_ORIG AS
--- INSERT YOUR ORIGINAL SCRIPT HERE
+CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_ORIG AS
+create table IF NOT EXISTS thcdnaproddata.aci.oredr_mnemonic_stg2 CLUSTER BY order_hss_id,ORDER_ID as	  
+  select * FROM   (
+  select s_o.HEALTH_SYSTEM_SOURCE_ID as order_hss_id, 
+       s_o.ORDER_ID as ORDER_ID, 
+	   s_o.ENCNTR_ID as ENCNTR_ID, 
+	   s_o.PERSON_ID as PERSON_ID, 
+	   s_o.ordered_as_mnemonic as ordered_as_mnemonic,
+	   s_o.ORDER_MNEMONIC as PRIMARY_MNEMONIC,
+	   s_o.CLINICAL_DISPLAY_LINE, 
+	   s_o.ORDER_DETAIL_DISPLAY_LINE 
+FROM thcdnaproddata.aci.oredr_mnemonic_stg1 stg1
+inner JOIN thcdnaproddata.cerner_ods.cerner_orders_hist s_o
+   on s_o.HEALTH_SYSTEM_SOURCE_ID = stg1.order_hss_id and
+	  s_o.ORDER_ID = stg1.ORDER_id 
+	  
+	UNION ALL
+	  
+	select s_o.HEALTH_SYSTEM_SOURCE_ID as order_hss_id, 
+       s_o.ORDER_ID as ORDER_ID, 
+	   s_o.ENCNTR_ID as ENCNTR_ID, 
+	   s_o.PERSON_ID as PERSON_ID, 
+	   s_o.ordered_as_mnemonic as ordered_as_mnemonic,
+	   s_o.ORDER_MNEMONIC as PRIMARY_MNEMONIC,
+	   s_o.CLINICAL_DISPLAY_LINE, 
+	   s_o.ORDER_DETAIL_DISPLAY_LINE 
+FROM thcdnaproddata.aci.oredr_mnemonic_stg1 stg1
+inner JOIN thcdnaproddata.cerner_ods.dmc_orders_hist s_o
+   on s_o.HEALTH_SYSTEM_SOURCE_ID = stg1.order_hss_id and
+	  s_o.ORDER_ID = stg1.ORDER_id 
+	  
+	  ) as foo;
 
 -- =================================================================================================
 -- 3. Create the Optimized Temporary Table (V_TEMP_TABLE_OPT)
 -- =================================================================================================
---CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_OPT AS
--- INSERT YOUR OPTIMIZED SCRIPT HERE
+CREATE OR REPLACE TEMP TABLE V_TEMP_TABLE_OPT AS
+CREATE TABLE IF NOT EXISTS thcdnaproddata.aci.oredr_mnemonic_stg2
+CLUSTER BY order_hss_id, ORDER_ID AS
+WITH
+  stg1_keys AS (
+    SELECT
+      order_hss_id,
+      ORDER_id
+    FROM
+      thcdnaproddata.aci.oredr_mnemonic_stg1
+  )
+SELECT
+  s_o.HEALTH_SYSTEM_SOURCE_ID AS order_hss_id,
+  s_o.ORDER_ID AS ORDER_ID,
+  s_o.ENCNTR_ID AS ENCNTR_ID,
+  s_o.PERSON_ID AS PERSON_ID,
+  s_o.ordered_as_mnemonic AS ordered_as_mnemonic,
+  s_o.ORDER_MNEMONIC AS PRIMARY_MNEMONIC,
+  s_o.CLINICAL_DISPLAY_LINE,
+  s_o.ORDER_DETAIL_DISPLAY_LINE
+FROM
+  stg1_keys
+INNER JOIN
+  thcdnaproddata.cerner_ods.cerner_orders_hist AS s_o
+  ON s_o.HEALTH_SYSTEM_SOURCE_ID = stg1_keys.order_hss_id
+  AND s_o.ORDER_ID = stg1_keys.ORDER_id
+UNION ALL
+SELECT
+  s_o.HEALTH_SYSTEM_SOURCE_ID AS order_hss_id,
+  s_o.ORDER_ID AS ORDER_ID,
+  s_o.ENCNTR_ID AS ENCNTR_ID,
+  s_o.PERSON_ID AS PERSON_ID,
+  s_o.ordered_as_mnemonic AS ordered_as_mnemonic,
+  s_o.ORDER_MNEMONIC AS PRIMARY_MNEMONIC,
+  s_o.CLINICAL_DISPLAY_LINE,
+  s_o.ORDER_DETAIL_DISPLAY_LINE
+FROM
+  stg1_keys
+INNER JOIN
+  thcdnaproddata.cerner_ods.dmc_orders_hist AS s_o
+  ON s_o.HEALTH_SYSTEM_SOURCE_ID = stg1_keys.order_hss_id
+  AND s_o.ORDER_ID = stg1_keys.ORDER_id;
 
 -- =================================================================================================
 -- 4. Validation Step: Compare the two tables and check optimized duplicates.

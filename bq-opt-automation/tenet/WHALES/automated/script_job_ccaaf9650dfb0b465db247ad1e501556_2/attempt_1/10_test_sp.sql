@@ -1,4 +1,26 @@
-CREATE PROCEDURE thcdnaproddata.idm.sp_fact_encounter_guarantor(IN inparam_facility_cd STRING, OUT OUT_PARAM INT64)
+-- Job ID: script_job_ccaaf9650dfb0b465db247ad1e501556_2
+
+-- ---------------------------------------------------------------------------
+-- Test stored procedure script.
+-- Creates scratch objects in thcdnadevdata.staging,
+-- invokes the optimized test SP, and drops those objects at the end.
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- 1. Create scratch tables and optimized test stored procedure.
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- Test scaffolding only.
+-- The tables below are created in thcdnadevdata.staging
+-- as prerequisites for manually testing the optimized SP.
+-- They are not part of the stored procedure definition and are dropped in
+-- the cleanup block at the end of the combined test script.
+-- ---------------------------------------------------------------------------
+
+-- No prod DML targets were detected.
+
+CREATE OR REPLACE PROCEDURE thcdnadevdata.staging.opt_sp_fact_encounter_guarantor(IN inparam_facility_cd STRING, OUT OUT_PARAM INT64)
 BEGIN
   /* ------------------------------------------------------------------------------------------------------------------------------------------------------- */
   -- Proc name    : sp_fact_encounter_guarantor
@@ -301,3 +323,19 @@ SELECT
 END;
 
 END;
+
+-- ---------------------------------------------------------------------------
+-- 2. Invoke optimized test stored procedure.
+-- ---------------------------------------------------------------------------
+
+BEGIN
+  DECLARE OUT_PARAM INT64 DEFAULT NULL;
+  CALL thcdnadevdata.staging.opt_sp_fact_encounter_guarantor('SMQ', OUT_PARAM);
+  SELECT OUT_PARAM AS out_status;
+END;
+
+-- ---------------------------------------------------------------------------
+-- 3. Cleanup scratch tables and optimized test stored procedure.
+-- ---------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS thcdnadevdata.staging.opt_sp_fact_encounter_guarantor;
