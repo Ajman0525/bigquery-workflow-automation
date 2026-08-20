@@ -3,28 +3,37 @@
 This script copies the local SQL templates, fetches the matching BigQuery
 metadata, optionally triggers the optimization workflow once, and writes the
 numbered files used by the Conifer review folders.
+
+Updated by: Ajman Mocsana
+Additional Features: 
+1) Added a documentation on the generated artifacts
+2) Concurrently fetches the artifacts of multiple job IDs marked as "In Progress" inside the config.csv
 """
 
 from __future__ import annotations
-
-import argparse
-import csv
 import json
 import logging
 import re
 import shutil
-import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from pathlib import Path
-from typing import Any
-
 import google.auth
 from google.auth.transport.requests import AuthorizedSession
 from google.cloud import bigquery
 from openpyxl import load_workbook
+import csv
+import concurrent.futures
+import sys
+import copy
+import argparse
+from pathlib import Path
+from typing import List, Dict, Any
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.console import Console
+from rich.table import Table
 
+console = Console()
 
 ROOT_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = ROOT_DIR / "templates" / "job_id"
@@ -2922,7 +2931,200 @@ def read_text_if_exists(path: Path) -> str:
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(normalize_newlines(text), encoding="utf-8", newline="\n")
+    
+def fetch_jobs_by_owner(csv_path: str, target_owner: str, target_status: str) -> List[dict]:
+    """Fetch deliverables from the CSV based on 'owner' AND 'Status'."""
+    jobs = []
+    # target_status = "in progress"
+    
+    with open(csv_path, mode='r', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        # enumerate(..., start=2) tracks the actual Excel/CSV row number
+        for row_num, row in enumerate(reader, start=2):
+            owner = row.get('owner', '').strip().lower()
+            status = row.get('Status', '').strip().lower()
+            
+            if owner == target_owner.lower() and status == target_status.lower():
+                # Store the entire row dictionary and inject our row number
+                job_data = dict(row)
+                job_data['csv_row_number'] = row_num
+                jobs.append(job_data)
+                
+    return jobs
+
+def process_single_job(row: dict, base_args: argparse.Namespace, force_rerun_ids: List[str], progress: Progress, task_id: int) -> Dict[str, str]:
+    """Handles artifact generation for a single job ID."""
+    
+    job_id = row.get('job_id', '').strip()
+    progress.update(task_id, description=f"[cyan]Processing {job_id} - Initializing...")
+
+    automation = None
+    item = None
+    
+    try:
+        item = ConfigItem(
+            entity=row.get('Entity', '').strip(), 
+            metric_name=row.get('metric_name', '').strip(), 
+            parent_job_id=row.get('parent_job_id', '').strip(),
+            job_id=job_id
+        )
+        
+        local_args = copy.copy(base_args)
+        
+        if job_id in force_rerun_ids:
+            local_args.rerun_job_id = job_id  
+            progress.update(task_id, description=f"[yellow]Processing {job_id} - FORCING NEW WORKFLOW...")
+        else:
+            local_args.rerun_job_id = None
+            progress.update(task_id, description=f"[blue]Processing {job_id} - Fetching/Generating Artifacts...")
+            
+        automation = ArtifactAutomation(local_args)
+        
+        automation.process_item(item)
+        
+        progress.update(task_id, description=f"[green]Completed {job_id}", completed=100)
+        status_msg = "SUCCESS: Forced new workflow execution." if job_id in force_rerun_ids else "SUCCESS: Artifacts built and fetched."
+        return {"job_id": job_id, "status": status_msg}
+
+    except Exception as e:
+        progress.update(task_id, description=f"[red]Failed {job_id}", completed=100)
+        return {"job_id": job_id, "status": f"ERROR: {str(e)}"}
+        
+    finally:
+        if automation and item:
+            try:
+                attempt_number = automation.resolve_attempt_number(item)
+                job_dir = item.job_root / f"attempt_{attempt_number}"
+                
+                # Ensure the directory exists (in case the script failed before creating it)
+                job_dir.mkdir(parents=True, exist_ok=True)
+                
+                doc_file = job_dir / "0_documentation.md"
+                doc_content = (
+                    f"# Job Documentation: {job_id}\n\n"
+                    f"- **CSV Row Number:** {row.get('csv_row_number')}\n"
+                    f"- **Owner:** {row.get('owner', 'N/A')}\n"
+                    f"- **Status:** {row.get('Status', 'N/A')}\n"
+                    f"- **Entity:** {row.get('Entity', 'N/A')}\n"
+                    f"- **Job ID:** {job_id}\n"
+                    f"- **Parent Job ID:** {row.get('parent_job_id', 'N/A')}\n"
+                    f"- **SP Name:** {row.get('SP_Name', 'N/A')}\n"
+                    f"- **Frequency:** {row.get('frequency', 'N/A')}\n\n"
+                    f"## Notes\n{row.get('notes', 'None provided.')}\n\n"
+                    f"## Comments\n{row.get('comments', 'None provided.')}\n"
+                )
+                doc_file.write_text(doc_content, encoding="utf-8")
+            except Exception:
+                pass
+
+
+def run_concurrent_batch(csv_path: str, owner: str, args: argparse.Namespace, force_rerun_ids: List[str], max_workers: int = 5, preview_only: bool = False, target_status: str = "In Progress", force_rerun_all: bool = False):
+    """Orchestrates the concurrent execution and CLI dashboard."""
+    target_jobs = fetch_jobs_by_owner(csv_path, owner, target_status)
+    
+    if not target_jobs:
+        console.print(f"[bold red]No jobs found for owner: '{owner}' with status '{target_status}' [/bold red]")
+        return
+    
+    if force_rerun_all:
+        force_rerun_ids = [row.get('job_id') for row in target_jobs if row.get('job_id')]
+
+    if preview_only:
+        console.print(f"\n[bold cyan]🔍 PREVIEW MODE: Found {len(target_jobs)} jobs. No actions will be taken.[/bold cyan]")
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Row #", justify="right", style="dim")
+        table.add_column("Job ID", style="cyan")
+        table.add_column("Entity", style="green")
+        table.add_column("Status", style="blue")
+        table.add_column("Action", style="yellow")
+        
+        for row in target_jobs:
+            job_id = row.get('job_id', 'Unknown')
+            # Highlight if the job is going to force a brand new workflow run
+            action = "[bold red]FORCED RERUN[/bold red]" if job_id in force_rerun_ids else "Standard (Fetch/Gen)"
+            
+            table.add_row(
+                str(row.get('csv_row_number', 'N/A')),
+                job_id,
+                row.get('Entity', 'N/A'),
+                row.get('Status', 'N/A'),
+                action
+            )
+        console.print(table)
+        console.print("[dim]Run the command again without --preview to execute this batch.[/dim]\n")
+        return
+
+    console.print(f"[bold green]Found {len(target_jobs)} jobs for {owner}. Starting concurrent processing with {max_workers} workers...[/bold green]")
+    if force_rerun_ids:
+        console.print(f"[bold yellow]Forcing new workflow execution for {len(force_rerun_ids)} flagged jobs.[/bold yellow]")
+
+    results = []
+    
+    # 2 refreshes per second prevents the Git Bash "waterfall" rendering glitch
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        console=console,
+        refresh_per_second=2, 
+    ) as progress:
+        
+        futures_map = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for row in target_jobs:
+                job_id = row.get('job_id', 'Unknown')
+                task_id = progress.add_task(f"[cyan]Pending {job_id}", total=100)
+                
+                # Submit to thread pool
+                future = executor.submit(process_single_job, row, args, force_rerun_ids, progress, task_id)
+                futures_map[future] = job_id
+            
+            for future in concurrent.futures.as_completed(futures_map):
+                job_id = futures_map[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception as exc:
+                    results.append({"job_id": job_id, "status": f"FATAL THREAD ERROR: {exc}"})
+
+    console.print("\n[bold]Execution Summary:[/bold]")
+    for res in results:
+        status_color = "green" if "SUCCESS" in res['status'] else "red"
+        console.print(f"Job: [bold]{res['job_id']}[/bold] | Status: [{status_color}]{res['status']}[/{status_color}]")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # 1. Pre-parse custom flags before passing the rest to your original parser
+    custom_parser = argparse.ArgumentParser(add_help=False)
+    custom_parser.add_argument("--force-rerun-ids", type=str, default="", help="Comma-separated list of job IDs to force rerun")
+    
+    # ADDITIONAL ARGUMENTS
+    custom_parser.add_argument("--force-rerun-all", action="store_true", help="Force a brand new workflow execution for ALL fetched jobs")
+    custom_parser.add_argument("--owner", type=str, default="Ajman", help="Target owner name (Defaults to 'Ajman')")
+    custom_parser.add_argument("--status", type=str, default="In Progress", help="Target csv status (Defaults to 'In Progress')")
+    custom_parser.add_argument("--csv", type=str, default="config.csv", help="Path to your target CSV file")
+    custom_parser.add_argument("--max-workers", type=int, default=5, help="Number of threads to concurrently run")
+    custom_parser.add_argument("--preview", action="store_true", help="Print a table of jobs to be executed without actually running them")
+    
+    custom_args, remaining_argv = custom_parser.parse_known_args(sys.argv[1:])
+    
+    # 2. Parse standard arguments using your existing parser
+    args = parse_args(remaining_argv)
+    
+    # 3. Clean up the comma-separated force-rerun list
+    force_ids_list = [jid.strip() for jid in custom_args.force_rerun_ids.split(",")] if custom_args.force_rerun_ids else []
+    
+    try:
+        run_concurrent_batch(
+            csv_path=custom_args.csv, 
+            owner=custom_args.owner, 
+            args=args,
+            force_rerun_ids=force_ids_list,
+            max_workers=custom_args.max_workers,
+            preview_only=custom_args.preview, 
+            target_status=custom_args.status,
+            force_rerun_all=custom_args.force_rerun_all
+        )
+    except Exception as e:
+        console.print(f"[bold red]Execution halted: {e}[/bold red]")
